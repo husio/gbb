@@ -1,0 +1,30 @@
+{{template "header.tmpl"}}
+
+<body>
+  <span id="top"></span>
+
+  <p>
+    <a href="/p/">Back to listing</a>
+  </p>
+
+  <h1>{{.Post.Title}}</h1>
+  {{range .Comments}}
+    <hr>
+    <div>
+      <p>{{.Content}}</p>
+      <p>
+        <small>
+          by <a href="#">{{.Author.Name}}</a>
+          at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
+        </small>
+      </p>
+    </div>
+  {{end}}
+
+  <form method="POST" action="./comment/" enctype="multipart/form-data">
+    <textarea name="content" required></textarea>
+    <button type="submit">Comment</button>
+  </form>
+
+  <span id="bottom"></span>
+</body>

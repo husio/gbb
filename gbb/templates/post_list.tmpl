@@ -1,0 +1,29 @@
+{{template "header.tmpl"}}
+
+<body>
+  {{if .Posts}}
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Author</th>
+          <th>&#128065;</th>
+          <th>&#128172;</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Posts}}
+          <tr>
+            <td><a href="/p/{{.PostID}}/">{{.Title}}</a></td>
+            <td>{{.Author.Name}}</td>
+            <td>{{.ViewsCount}}</td>
+            <td>{{.CommentsCount}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  {{else}}
+    <div>No posts</div>
+  {{end}}
+  <a class="button" href="/p/new/">Create new post</a>
+</body>
