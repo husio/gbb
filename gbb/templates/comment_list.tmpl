@@ -1,4 +1,11 @@
 {{template "header.tmpl"}}
+<style>
+.comment { border-top: 1px solid #ddd; padding: 10px; margin: 20px 0; }
+.comment-content h1 { font-size: 1.4em; }
+.comment-content h2 { font-size: 1.2em; }
+.comment-content h3 { font-size: 1.1em; }
+.comment-content h4 { font-size: 1em; }
+</style>
 
 <body>
   <span id="top"></span>
@@ -9,17 +16,25 @@
 
   <h1>{{.Post.Title}}</h1>
   {{range .Comments}}
-    <hr>
-    <div>
-      <p>{{.Content}}</p>
+    <div class="comment" id="comment-{{.CommentID}}">
+      <div class="comment-content">
+        <p>{{.Content | markdown}}</p>
+      </div>
       <p>
         <small>
-          by <a href="#">{{.Author.Name}}</a>
+          <a href="./#comment-{{.CommentID}}">#</a>
+          by <a href="/u/{{.Author.UserID}}">{{.Author.Name}}</a>
           at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
         </small>
       </p>
     </div>
   {{end}}
+
+  <p>
+    <a href="#top">Top of the page</a>
+    |
+    <a href="/p/">Back to listing</a>
+  </p>
 
   <form method="POST" action="./comment/" enctype="multipart/form-data">
     <textarea name="content" required></textarea>

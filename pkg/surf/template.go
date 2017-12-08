@@ -19,14 +19,16 @@ type Renderer interface {
 	RenderStdResponse(w http.ResponseWriter, statusCode int)
 }
 
-func NewHTMLRenderer(templatesGlob string) Renderer {
+func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) Renderer {
 	renderer := &htmlRenderer{
+		funcs:         funcs,
 		templatesGlob: templatesGlob,
 	}
 	return renderer
 }
 
 type htmlRenderer struct {
+	funcs         template.FuncMap
 	templatesGlob string
 }
 
@@ -35,7 +37,7 @@ func (rend *htmlRenderer) RenderResponse(w http.ResponseWriter, statusCode int, 
 	header.Set("content-type", "text/html; charset=utf-8")
 
 	// TODO: cache instead of reading file every time (unless in development mode)
-	tmpl, err := defaultTemplate().ParseGlob(rend.templatesGlob)
+	tmpl, err := defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
 	if err != nil {
 		rend.renderTemplateParseError(w, templateName, err)
 		return

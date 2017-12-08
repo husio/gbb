@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"html/template"
 	"net/http"
 	"os"
 
 	"github.com/husio/gbb/gbb"
 	"github.com/husio/gbb/pkg/surf"
+	"github.com/shurcooL/github_flavored_markdown"
 )
 
 func main() {
@@ -27,7 +29,12 @@ func main() {
 
 	store := gbb.NewSqliteStore(db)
 
-	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl")
+	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", template.FuncMap{
+		"markdown": func(s string) template.HTML {
+			html := github_flavored_markdown.Markdown([]byte(s))
+			return template.HTML(html)
+		},
+	})
 
 	rt := surf.NewRouter()
 
@@ -37,6 +44,13 @@ func main() {
 	rt.Post(`/p/new/`, gbb.PostCreateHandler(store, renderer))
 	rt.Get(`/p/<post-id:[^/]+>/`, gbb.CommentListHandler(store, renderer))
 	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(store, renderer))
+
+	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
+		renderer.RenderResponse(w, http.StatusOK, "ghost_template.tmpl", nil)
+	})
+	rt.Get(`/_/template/invalidcontext/`, func(w http.ResponseWriter, r *http.Request) {
+		renderer.RenderResponse(w, http.StatusOK, "post_list.tmpl", nil)
+	})
 
 	app := surf.NewHTTPApplication(rt, true, logger)
 

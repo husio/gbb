@@ -104,6 +104,11 @@ func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*P
 		if err := resp.Scan(&p.PostID, &p.Title, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); err != nil {
 			return posts, fmt.Errorf("cannot scan row: %s", err)
 		}
+
+		surf.Info(ctx, "example log while scanning posts",
+			"post", fmt.Sprint(p.PostID),
+			"post.title", p.Title)
+
 		posts = append(posts, &p)
 	}
 	return posts, nil
