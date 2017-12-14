@@ -87,7 +87,7 @@
 			"revisionTime": "2017-05-15T01:31:02Z"
 		},
 		{
-			"checksumSHA1": "tY1pkJMYzCHI7oGEefxGzqYB1LU=",
+			"checksumSHA1": "h5iCjaJXT8TVTmUDYld1r9Uh84s=",
 			"path": "github.com/shurcooL/octiconssvg",
 			"revision": "38b02129bb6460858e11f90798a3832da1e502bd",
 			"revisionTime": "2017-11-28T00:48:30Z"
@@ -123,7 +123,7 @@
 			"revisionTime": "2017-11-29T19:21:16Z"
 		},
 		{
-			"checksumSHA1": "iWvOOLdDxvI4AVX6px6/HYBPeaQ=",
+			"checksumSHA1": "uMRr2bnIJS+9Xm0FqMBYUTzaSGs=",
 			"path": "golang.org/x/net/html/atom",
 			"revision": "a8b9294777976932365dabb6640cf1468d95c70f",
 			"revisionTime": "2017-11-29T19:21:16Z"

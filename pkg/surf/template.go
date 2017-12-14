@@ -425,6 +425,28 @@ func defaultTemplate() *template.Template {
 	{{- end}}
 {{end}}
 
+
+{{define "surf/panic_error.tmpl" -}}
+	{{template "surf/error_header.tmpl"}}
+	{{template "surf/error_css.tmpl"}}
+
+	<h1>Application crashed</h1>
+	<p>{{.PanicErr}}</h2>
+
+	<h2>Location</h2>
+	{{range .Stack}}
+		<em>{{.FilePath}}</em>
+		<div class="file-content">
+		{{range .Content}}
+			<pre><code {{- if .Highlight}} class="highlight"{{end}}><span class="line-number">{{.Number}}</span> {{.Content}}</code></pre>
+		{{end}}
+		</div>
+	{{end}}
+
+	<h2>Full stack</h2>
+	<code><pre>{{.FullStack}}</pre></code>
+{{end}}
+
 `))
 }
 

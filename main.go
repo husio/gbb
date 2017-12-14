@@ -54,6 +54,8 @@ func main() {
 
 	app := surf.NewHTTPApplication(rt, true, logger)
 
+	logger.Info(context.Background(), "starting server",
+		"port", "8000")
 	if err := http.ListenAndServe(":8000", app); err != nil {
 		logger.Error(context.Background(), err, "HTTP server failed")
 	}
