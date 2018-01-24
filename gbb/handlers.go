@@ -13,20 +13,19 @@ const userID = "rickybobby"
 func PostListHandler(
 	store BBStore,
 	rend surf.Renderer,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) http.Handler {
 		ctx := r.Context()
 
 		posts, err := store.ListPosts(ctx, time.Now())
 		if err != nil {
 			surf.Error(ctx, err, "cannot fetch posts")
-			rend.RenderStdResponse(w, http.StatusInternalServerError)
-			return
+			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
 
-		defer surf.CurrentSpan(ctx).StartSpan("render post_list.tmpl", nil).FinishSpan(nil)
+		defer surf.CurrentTrace(ctx).Start("render post_list.tmpl", nil).Finish(nil)
 
-		rend.RenderResponse(w, http.StatusOK, "post_list.tmpl", struct {
+		return rend.Response(http.StatusOK, "post_list.tmpl", struct {
 			Posts []*Post
 		}{
 			Posts: posts,
@@ -37,68 +36,65 @@ func PostListHandler(
 func PostCreateHandler(
 	store BBStore,
 	rend surf.Renderer,
-) http.HandlerFunc {
+) surf.HandlerFunc {
 	type Content struct {
 		Title   string
 		Content string
 		Errors  map[string]string
 	}
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) http.Handler {
 		ctx := r.Context()
 
 		content := Content{}
 
 		if r.Method == "POST" {
 			if err := r.ParseMultipartForm(1e6); err != nil {
-				rend.RenderStdResponse(w, http.StatusBadRequest)
-				return
+				return surf.StdResponse(rend, http.StatusBadRequest)
 			}
 
 			content.Errors = make(map[string]string)
 
 			content.Title = strings.TrimSpace(r.Form.Get("title"))
 			if titleLen := len(content.Title); titleLen == 0 {
-				content.Errors["Title"] = "Required."
+				content.Errors["Title"] = "Title is required."
 			} else if titleLen < 2 {
 				content.Errors["Title"] = "Too short. Must be at least 2 characters"
 			}
 
 			content.Content = strings.TrimSpace(r.Form.Get("content"))
 			if cLen := len(content.Content); cLen == 0 {
-				content.Errors["Content"] = "Required."
+				content.Errors["Content"] = "Content is required."
 			} else if cLen < 2 {
 				content.Errors["Content"] = "Too short. Must be at least 2 characters"
 			}
 
 			if len(content.Errors) != 0 {
-				rend.RenderResponse(w, http.StatusBadRequest, "post_create.tmpl", content)
-				return
+				return rend.Response(http.StatusBadRequest, "post_create.tmpl", content)
 			}
 
 			post, _, err := store.CreatePost(ctx, content.Title, content.Content, userID)
 			if err != nil {
 				surf.Error(ctx, err, "cannot create posts")
-				rend.RenderStdResponse(w, http.StatusInternalServerError)
-				return
+				return surf.StdResponse(rend, http.StatusInternalServerError)
 			}
 
 			http.Redirect(w, r, "/p/"+post.PostID+"/#bottom", http.StatusSeeOther)
 		}
 
-		rend.RenderResponse(w, http.StatusOK, "post_create.tmpl", content)
+		return rend.Response(http.StatusOK, "post_create.tmpl", content)
 	}
 }
 
 func CommentListHandler(
 	store BBStore,
 	rend surf.Renderer,
-) http.HandlerFunc {
+) surf.HandlerFunc {
 	type Content struct {
 		Post     *Post
 		Comments []*Comment
 	}
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) http.Handler {
 		ctx := r.Context()
 
 		postID := surf.PathArg(r, 0)
@@ -108,38 +104,34 @@ func CommentListHandler(
 			// all good
 		case ErrNotFound:
 			w.WriteHeader(http.StatusBadRequest)
-			rend.RenderStdResponse(w, http.StatusNotFound)
-			return
+			return surf.StdResponse(rend, http.StatusNotFound)
 		default:
 			surf.Error(ctx, err, "cannot fetch post and comments",
 				"postID", postID)
-			rend.RenderStdResponse(w, http.StatusInternalServerError)
-			return
+			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
-
-		content := Content{
-			Post:     post,
-			Comments: comments,
-		}
-		rend.RenderResponse(w, http.StatusOK, "comment_list.tmpl", content)
 
 		if err := store.IncrementPostView(ctx, postID); err != nil {
 			surf.Error(ctx, err, "cannot increment view counter",
 				"postID", post.PostID)
 		}
+
+		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
+			Post:     post,
+			Comments: comments,
+		})
 	}
 }
 
 func CommentCreateHandler(
 	store BBStore,
 	rend surf.Renderer,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) http.Handler {
 		ctx := r.Context()
 
 		if err := r.ParseMultipartForm(1e6); err != nil {
-			rend.RenderStdResponse(w, http.StatusBadRequest)
-			return
+			return surf.StdResponse(rend, http.StatusBadRequest)
 		}
 
 		postID := surf.PathArg(r, 0)
@@ -150,16 +142,15 @@ func CommentCreateHandler(
 			case nil:
 				// all good
 			case ErrNotFound:
-				rend.RenderStdResponse(w, http.StatusBadRequest)
-				return
+				return surf.StdResponse(rend, http.StatusBadRequest)
 			default:
 				surf.Error(ctx, err, "cannot create comment",
 					"content", content,
 					"postID", postID)
-				rend.RenderStdResponse(w, http.StatusInternalServerError)
-				return
+				return surf.StdResponse(rend, http.StatusInternalServerError)
 			}
 		}
 		http.Redirect(w, r, "/p/"+postID+"/#bottom", http.StatusSeeOther)
+		return nil
 	}
 }

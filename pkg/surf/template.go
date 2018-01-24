@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
@@ -15,8 +16,18 @@ import (
 )
 
 type Renderer interface {
-	RenderResponse(w http.ResponseWriter, statusCode int, templateName string, templateContext interface{})
-	RenderStdResponse(w http.ResponseWriter, statusCode int)
+	Response(statusCode int, templateName string, templateContext interface{}) http.Handler
+}
+
+func StdResponse(r Renderer, responseCode int) http.Handler {
+	return r.Response(responseCode, "stdresponse.tmpl", struct {
+		Code        int
+		Title       string
+		Description string
+	}{
+		Code:  responseCode,
+		Title: http.StatusText(responseCode),
+	})
 }
 
 func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) Renderer {
@@ -32,30 +43,38 @@ type htmlRenderer struct {
 	templatesGlob string
 }
 
-func (rend *htmlRenderer) RenderResponse(w http.ResponseWriter, statusCode int, templateName string, templateContext interface{}) {
-	header := w.Header()
-	header.Set("content-type", "text/html; charset=utf-8")
-
+func (rend *htmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) http.Handler {
 	// TODO: cache instead of reading file every time (unless in development mode)
 	tmpl, err := defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
 	if err != nil {
-		rend.renderTemplateParseError(w, templateName, err)
-		return
+		return rend.renderTemplateParseError(templateName, err)
 	}
 	var b bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&b, templateName, templateContext); err != nil {
-		rend.renderTemplateExecError(w, templateName, err)
-		return
+		return rend.renderTemplateExecError(templateName, err)
 	}
 
 	// TODO: support missing template error
 
-	if _, err := b.WriteTo(w); err != nil {
-		// TODO: log, but there is no response to be written anymore
+	return &htmlResponse{
+		code: statusCode,
+		body: &b,
 	}
 }
 
-func (rend *htmlRenderer) renderTemplateParseError(w http.ResponseWriter, templateName string, tmplErr error) {
+type htmlResponse struct {
+	code int
+	body io.Reader
+}
+
+func (resp *htmlResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	header := w.Header()
+	header.Set("content-type", "text/html; charset=utf-8")
+	w.WriteHeader(resp.code)
+	io.Copy(w, resp.body)
+}
+
+func (rend *htmlRenderer) renderTemplateParseError(templateName string, tmplErr error) http.Handler {
 	templateFile, errLineNo, description := parseTemplateParseError(tmplErr)
 
 	templateFiles, err := filepath.Glob(rend.templatesGlob)
@@ -72,15 +91,21 @@ func (rend *htmlRenderer) renderTemplateParseError(w http.ResponseWriter, templa
 	}
 	if !found {
 		// TODO
-		fmt.Fprintf(w, "template file not found: %q\n", templateFile)
-		return
+		return &htmlResponse{
+			code: http.StatusInternalServerError,
+			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
+				template not found: %q\n`, templateFile)),
+		}
 	}
 
 	content, err := ioutil.ReadFile(templateFile)
 	if err != nil {
 		// TODO
-		fmt.Fprintf(w, "cannot read %q tempalte file: %s\n", templateFile, err)
-		return
+		return &htmlResponse{
+			code: http.StatusInternalServerError,
+			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
+				cannot read %q template file: %s\n`, templateFile, err)),
+		}
 	}
 
 	errLineNo = adjustTemplateTrimming(errLineNo, content) - 1
@@ -102,10 +127,8 @@ func (rend *htmlRenderer) renderTemplateParseError(w http.ResponseWriter, templa
 		panic("cannot read stack information: " + err.Error())
 	}
 
-	header := w.Header()
-	header.Set("content-type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusInternalServerError)
-	err = defaultTemplate().ExecuteTemplate(w, "surf/render_error.tmpl", renderErrorContext{
+	var b bytes.Buffer
+	err = defaultTemplate().ExecuteTemplate(&b, "surf/render_error.tmpl", renderErrorContext{
 		Title:           "Cannot Parse Template",
 		Description:     description,
 		Stack:           stack,
@@ -114,7 +137,15 @@ func (rend *htmlRenderer) renderTemplateParseError(w http.ResponseWriter, templa
 		TemplateContent: codeLines,
 	})
 	if err != nil {
-		panic(err)
+		return &htmlResponse{
+			code: http.StatusInternalServerError,
+			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
+				cannot render error template: %s`, err)),
+		}
+	}
+	return &htmlResponse{
+		code: http.StatusInternalServerError,
+		body: &b,
 	}
 }
 
@@ -224,15 +255,11 @@ func adjustTemplateTrimming(lineNo int, templateContent []byte) int {
 	return lineNo
 }
 
-func (rend *htmlRenderer) renderTemplateExecError(w http.ResponseWriter, templateName string, tmplErr error) {
+func (rend *htmlRenderer) renderTemplateExecError(templateName string, tmplErr error) http.Handler {
 	stack, err := stackInformation(1, 8)
 	if err != nil {
 		panic("cannot read stack information: " + err.Error())
 	}
-
-	header := w.Header()
-	header.Set("content-type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusInternalServerError)
 
 	if execErr, ok := tmplErr.(texttemplate.ExecError); ok {
 		templateFile, errLineNo, _, _, description := parseTemplateExecError(execErr.Err)
@@ -251,15 +278,19 @@ func (rend *htmlRenderer) renderTemplateExecError(w http.ResponseWriter, templat
 		}
 		if !found {
 			// TODO
-			fmt.Fprintf(w, "template file not found: %q\n", templateFile)
-			return
+			return &htmlResponse{
+				code: http.StatusInternalServerError,
+				body: strings.NewReader(fmt.Sprintf(`<!doctype html>
+				template file not found: %q\n`, templateFile)),
+			}
 		}
 		templateContent, err := fileLines(templateFile, errLineNo, 8)
 		if err != nil {
 			panic("cannot read tempalte: " + err.Error())
 		}
 
-		err = defaultTemplate().ExecuteTemplate(w, "surf/render_error.tmpl", renderErrorContext{
+		var b bytes.Buffer
+		err = defaultTemplate().ExecuteTemplate(&b, "surf/render_error.tmpl", renderErrorContext{
 			Title:           "Cannot execute template",
 			Description:     description,
 			Stack:           stack,
@@ -268,19 +299,35 @@ func (rend *htmlRenderer) renderTemplateExecError(w http.ResponseWriter, templat
 			TemplateContent: templateContent,
 		})
 		if err != nil {
-			panic(err)
+			return &htmlResponse{
+				code: http.StatusInternalServerError,
+				body: strings.NewReader(fmt.Sprintf(`<!doctype html>
+				cannot render error template: %s`, err)),
+			}
 		}
-		return
+		return &htmlResponse{
+			code: http.StatusInternalServerError,
+			body: &b,
+		}
 	}
 
-	err = defaultTemplate().ExecuteTemplate(w, "surf/render_error.tmpl", renderErrorContext{
+	var b bytes.Buffer
+	err = defaultTemplate().ExecuteTemplate(&b, "surf/render_error.tmpl", renderErrorContext{
 		Title:        "Template not found",
 		Description:  "Template not defined or not in search directory.",
 		Stack:        stack,
 		TemplateName: templateName,
 	})
 	if err != nil {
-		panic(err)
+		return &htmlResponse{
+			code: http.StatusInternalServerError,
+			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
+				cannot render error template: %s`, err)),
+		}
+	}
+	return &htmlResponse{
+		code: http.StatusInternalServerError,
+		body: &b,
 	}
 }
 
@@ -318,17 +365,6 @@ func parseTemplateExecError(err error) (string, int, int, string, string) {
 	return fileName, int(lineNo), int(offset), desc1, desc2
 }
 
-func (rend *htmlRenderer) RenderStdResponse(w http.ResponseWriter, statusCode int) {
-	rend.RenderResponse(w, statusCode, "stdresponse.tmpl", struct {
-		Code        int
-		Title       string
-		Description string
-	}{
-		Code:  statusCode,
-		Title: http.StatusText(statusCode),
-	})
-}
-
 type renderErrorContext struct {
 	Title           string
 	Description     string
@@ -348,6 +384,27 @@ type codeLine struct {
 	Number    int
 	Highlight bool
 	Content   string
+}
+
+type defaultHtmlRenderer struct {
+	tmpl *template.Template
+}
+
+func newDefaultRenderer() Renderer {
+	return &defaultHtmlRenderer{
+		tmpl: defaultTemplate(),
+	}
+}
+
+func (rend *defaultHtmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) http.Handler {
+	var b bytes.Buffer
+	if err := rend.tmpl.ExecuteTemplate(&b, templateName, templateContext); err != nil {
+		panic(err)
+	}
+	return &htmlResponse{
+		code: statusCode,
+		body: &b,
+	}
 }
 
 // defaultTemplate is used as a fallback and guarantee that certain templates
@@ -451,8 +508,3 @@ func defaultTemplate() *template.Template {
 }
 
 const showCodeSurrounding = 5
-
-type discardRenderer struct{}
-
-func (discardRenderer) RenderResponse(http.ResponseWriter, int, string, interface{}) {}
-func (discardRenderer) RenderStdResponse(http.ResponseWriter, int, string)           {}

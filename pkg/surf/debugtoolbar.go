@@ -5,6 +5,8 @@ import (
 	"io"
 )
 
+//func InstallDebugToolbar(h
+
 func renderDebugToolbar(w io.Writer, context debugToolbarContext) error {
 	return tmpl.Execute(w, context)
 }

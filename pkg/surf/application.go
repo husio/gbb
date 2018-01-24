@@ -43,10 +43,10 @@ func (app *debugApplication) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var logRec logRecorder
 	ctx = attachLogger(ctx, broadcastLogs(app.logger, &logRec))
 
-	ctx, tr := attachTrace(ctx)
+	ctx, tr := attachTrace(ctx, "Handler", "")
 
 	defer func() {
-		finalizeTrace(tr)
+		tr.finalize()
 
 		err := renderDebugToolbar(w, debugToolbarContext{
 			TraceSpans: tr.spans,

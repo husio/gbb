@@ -46,10 +46,10 @@ func main() {
 	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(store, renderer))
 
 	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
-		renderer.RenderResponse(w, http.StatusOK, "ghost_template.tmpl", nil)
+		renderer.Response(http.StatusOK, "ghost_template.tmpl", nil)
 	})
 	rt.Get(`/_/template/invalidcontext/`, func(w http.ResponseWriter, r *http.Request) {
-		renderer.RenderResponse(w, http.StatusOK, "post_list.tmpl", nil)
+		renderer.Response(http.StatusOK, "post_list.tmpl", nil)
 	})
 
 	app := surf.NewHTTPApplication(rt, true, logger)

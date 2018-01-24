@@ -9,36 +9,15 @@ import (
 	"strings"
 )
 
-type Router struct {
+type router struct {
 	endpoints []endpoint
 
-	// NotFound is called when none of defined handlers match current route.
-	NotFound http.Handler
-
-	// MethodNotAllowed is called when there is path match but not for current
-	// method.
-	MethodNotAllowed http.Handler
+	rend Renderer
 }
 
-func NewRouter() *Router {
-	return &Router{
-		NotFound: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		}),
-		MethodNotAllowed: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-		}),
-	}
-}
-
-func NewJSONRouter() *Router {
-	return &Router{
-		NotFound: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			StdJSONResp(w, http.StatusNotFound)
-		}),
-		MethodNotAllowed: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			StdJSONResp(w, http.StatusMethodNotAllowed)
-		}),
+func NewRouter() *router {
+	return &router{
+		rend: newDefaultRenderer(),
 	}
 }
 
@@ -51,15 +30,27 @@ func NewJSONRouter() *Router {
 // purposes.
 //
 // Using '*' as methods will match any method.
-func (r *Router) Add(path, methods string, handler interface{}) {
-	var h http.Handler
+func (r *router) Add(path, methods string, handler interface{}) {
+	var h Handler
 	switch handler := handler.(type) {
+	case HandlerFunc:
+		h = handler
+	case Handler:
+		h = handler
+	case func(http.ResponseWriter, *http.Request) http.Handler:
+		h = HandlerFunc(handler)
 	case http.Handler:
-		h = handler
+		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) http.Handler {
+			return handler
+		})
 	case http.HandlerFunc:
-		h = handler
+		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) http.Handler {
+			return handler
+		})
 	case func(http.ResponseWriter, *http.Request):
-		h = http.HandlerFunc(handler)
+		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) http.Handler {
+			return http.HandlerFunc(handler)
+		})
 	default:
 		msg := fmt.Sprintf("invalid %s handler notation for %q", methods, path)
 		panic(msg)
@@ -95,33 +86,45 @@ func (r *Router) Add(path, methods string, handler interface{}) {
 
 }
 
-func (r *Router) Any(path string, handler interface{}) {
-	r.Add(path, "*", handler)
-}
-
-func (r *Router) Get(path string, handler interface{}) {
+func (r *router) Get(path string, handler interface{}) {
 	r.Add(path, "GET", handler)
 }
 
-func (r *Router) Post(path string, handler interface{}) {
+func (r *router) Post(path string, handler interface{}) {
 	r.Add(path, "POST", handler)
 }
 
-func (r *Router) Put(path string, handler interface{}) {
+func (r *router) Put(path string, handler interface{}) {
 	r.Add(path, "PUT", handler)
 }
 
-func (r *Router) Del(path string, handler interface{}) {
+func (r *router) Delete(path string, handler interface{}) {
 	r.Add(path, "DELETE", handler)
+}
+
+type Handler interface {
+	HandleHTTPRequest(http.ResponseWriter, *http.Request) http.Handler
+}
+
+type HandlerFunc func(http.ResponseWriter, *http.Request) http.Handler
+
+func (fn HandlerFunc) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) http.Handler {
+	return fn(w, r)
 }
 
 type endpoint struct {
 	methods map[string]struct{}
 	path    *regexp.Regexp
-	handler http.Handler
+	handler Handler
 }
 
-func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h := rt.HandleHTTPRequest(w, r); h != nil {
+		h.ServeHTTP(w, r)
+	}
+}
+
+func (rt *router) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) http.Handler {
 	var pathMatch bool
 
 	for _, endpoint := range rt.endpoints {
@@ -142,15 +145,13 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		args := match[0][1:]
 		r = r.WithContext(context.WithValue(r.Context(), pathArgsKey, args))
-		endpoint.handler.ServeHTTP(w, r)
-		return
+		return endpoint.handler.HandleHTTPRequest(w, r)
 	}
 
 	if pathMatch {
-		rt.MethodNotAllowed.ServeHTTP(w, r)
-	} else {
-		rt.NotFound.ServeHTTP(w, r)
+		return StdResponse(rt.rend, http.StatusMethodNotAllowed)
 	}
+	return StdResponse(rt.rend, http.StatusNotFound)
 }
 
 var pathArgsKey = struct{}{}

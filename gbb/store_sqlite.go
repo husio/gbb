@@ -73,7 +73,7 @@ func EnsureSchema(db *sql.DB) error {
 }
 
 func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
-	defer surf.CurrentSpan(ctx).StartSpan("ListPosts", nil).FinishSpan(nil)
+	defer surf.CurrentTrace(ctx).Start("ListPosts", nil).Finish(nil)
 
 	var posts []*Post
 	resp, err := s.db.QueryContext(ctx, `
@@ -105,18 +105,14 @@ func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*P
 			return posts, fmt.Errorf("cannot scan row: %s", err)
 		}
 
-		surf.Info(ctx, "example log while scanning posts",
-			"post", fmt.Sprint(p.PostID),
-			"post.title", p.Title)
-
 		posts = append(posts, &p)
 	}
 	return posts, nil
 }
 
 func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLte time.Time) (*Post, []*Comment, error) {
-	span := surf.CurrentSpan(ctx).StartSpan("ListComments", nil)
-	defer span.FinishSpan(nil)
+	span := surf.CurrentTrace(ctx).Start("ListComments", nil)
+	defer span.Finish(nil)
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -125,7 +121,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 	defer tx.Rollback()
 
 	var p Post
-	fetchPostSpan := span.StartSpan("query post", map[string]string{"post": postID})
+	fetchPostSpan := span.Start("query post", map[string]string{"post": postID})
 	row := tx.QueryRowContext(ctx, `
 		SELECT
 			p.post_id,
@@ -142,7 +138,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 			p.post_id = ?
 		LIMIT 1
 	`, postID)
-	fetchPostSpan.FinishSpan(nil)
+	fetchPostSpan.Finish(nil)
 	switch err := row.Scan(&p.PostID, &p.Title, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); castErr(err) {
 	case nil:
 		// all good
@@ -153,7 +149,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 	}
 
 	var comments []*Comment
-	defer span.StartSpan("fetch comments", nil).FinishSpan(nil)
+	defer span.Start("fetch comments", nil).Finish(nil)
 	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			c.comment_id,
@@ -188,7 +184,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 }
 
 func (s *sqliteStore) CreatePost(ctx context.Context, title, content, userID string) (*Post, *Comment, error) {
-	defer surf.CurrentSpan(ctx).StartSpan("CreatePost", nil).FinishSpan(nil)
+	defer surf.CurrentTrace(ctx).Start("CreatePost", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -247,7 +243,7 @@ func (s *sqliteStore) CreatePost(ctx context.Context, title, content, userID str
 }
 
 func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID string) (*Comment, error) {
-	defer surf.CurrentSpan(ctx).StartSpan("CreateComment", nil).FinishSpan(nil)
+	defer surf.CurrentTrace(ctx).Start("CreateComment", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -306,7 +302,7 @@ func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID
 }
 
 func (s *sqliteStore) IncrementPostView(ctx context.Context, postID string) error {
-	defer surf.CurrentSpan(ctx).StartSpan("IncrementPostView", nil).FinishSpan(nil)
+	defer surf.CurrentTrace(ctx).Start("IncrementPostView", nil).Finish(nil)
 
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE posts SET views_count = views_count + 1
