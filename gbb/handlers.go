@@ -14,7 +14,7 @@ func PostListHandler(
 	store BBStore,
 	rend surf.Renderer,
 ) surf.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) http.Handler {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
 		posts, err := store.ListPosts(ctx, time.Now())
@@ -22,8 +22,6 @@ func PostListHandler(
 			surf.Error(ctx, err, "cannot fetch posts")
 			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
-
-		defer surf.CurrentTrace(ctx).Start("render post_list.tmpl", nil).Finish(nil)
 
 		return rend.Response(http.StatusOK, "post_list.tmpl", struct {
 			Posts []*Post
@@ -42,7 +40,7 @@ func PostCreateHandler(
 		Content string
 		Errors  map[string]string
 	}
-	return func(w http.ResponseWriter, r *http.Request) http.Handler {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
 		content := Content{}
@@ -94,7 +92,7 @@ func CommentListHandler(
 		Comments []*Comment
 	}
 
-	return func(w http.ResponseWriter, r *http.Request) http.Handler {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
 		postID := surf.PathArg(r, 0)
@@ -127,7 +125,7 @@ func CommentCreateHandler(
 	store BBStore,
 	rend surf.Renderer,
 ) surf.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) http.Handler {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
 		if err := r.ParseMultipartForm(1e6); err != nil {

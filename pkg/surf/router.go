@@ -37,18 +37,18 @@ func (r *router) Add(path, methods string, handler interface{}) {
 		h = handler
 	case Handler:
 		h = handler
-	case func(http.ResponseWriter, *http.Request) http.Handler:
+	case func(http.ResponseWriter, *http.Request) Response:
 		h = HandlerFunc(handler)
 	case http.Handler:
-		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) http.Handler {
+		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
 			return handler
 		})
 	case http.HandlerFunc:
-		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) http.Handler {
+		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
 			return handler
 		})
 	case func(http.ResponseWriter, *http.Request):
-		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) http.Handler {
+		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
 			return http.HandlerFunc(handler)
 		})
 	default:
@@ -103,12 +103,16 @@ func (r *router) Delete(path string, handler interface{}) {
 }
 
 type Handler interface {
-	HandleHTTPRequest(http.ResponseWriter, *http.Request) http.Handler
+	HandleHTTPRequest(http.ResponseWriter, *http.Request) Response
 }
 
-type HandlerFunc func(http.ResponseWriter, *http.Request) http.Handler
+type Response interface {
+	http.Handler
+}
 
-func (fn HandlerFunc) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) http.Handler {
+type HandlerFunc func(http.ResponseWriter, *http.Request) Response
+
+func (fn HandlerFunc) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Response {
 	return fn(w, r)
 }
 
@@ -120,11 +124,12 @@ type endpoint struct {
 
 func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h := rt.HandleHTTPRequest(w, r); h != nil {
+		defer CurrentTrace(r.Context()).Start("Writing response", nil).Finish(nil)
 		h.ServeHTTP(w, r)
 	}
 }
 
-func (rt *router) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) http.Handler {
+func (rt *router) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Response {
 	var pathMatch bool
 
 	for _, endpoint := range rt.endpoints {

@@ -75,6 +75,8 @@ func EnsureSchema(db *sql.DB) error {
 func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
 	defer surf.CurrentTrace(ctx).Start("ListPosts", nil).Finish(nil)
 
+	surf.Info(ctx, "listing posts",
+		"createdLte", createdLte.String())
 	var posts []*Post
 	resp, err := s.db.QueryContext(ctx, `
 		SELECT

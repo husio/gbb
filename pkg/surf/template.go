@@ -16,10 +16,10 @@ import (
 )
 
 type Renderer interface {
-	Response(statusCode int, templateName string, templateContext interface{}) http.Handler
+	Response(statusCode int, templateName string, templateContext interface{}) Response
 }
 
-func StdResponse(r Renderer, responseCode int) http.Handler {
+func StdResponse(r Renderer, responseCode int) Response {
 	return r.Response(responseCode, "stdresponse.tmpl", struct {
 		Code        int
 		Title       string
@@ -43,7 +43,7 @@ type htmlRenderer struct {
 	templatesGlob string
 }
 
-func (rend *htmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) http.Handler {
+func (rend *htmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) Response {
 	// TODO: cache instead of reading file every time (unless in development mode)
 	tmpl, err := defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
 	if err != nil {
@@ -74,7 +74,7 @@ func (resp *htmlResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.body)
 }
 
-func (rend *htmlRenderer) renderTemplateParseError(templateName string, tmplErr error) http.Handler {
+func (rend *htmlRenderer) renderTemplateParseError(templateName string, tmplErr error) Response {
 	templateFile, errLineNo, description := parseTemplateParseError(tmplErr)
 
 	templateFiles, err := filepath.Glob(rend.templatesGlob)
@@ -255,7 +255,7 @@ func adjustTemplateTrimming(lineNo int, templateContent []byte) int {
 	return lineNo
 }
 
-func (rend *htmlRenderer) renderTemplateExecError(templateName string, tmplErr error) http.Handler {
+func (rend *htmlRenderer) renderTemplateExecError(templateName string, tmplErr error) Response {
 	stack, err := stackInformation(1, 8)
 	if err != nil {
 		panic("cannot read stack information: " + err.Error())
@@ -396,7 +396,7 @@ func newDefaultRenderer() Renderer {
 	}
 }
 
-func (rend *defaultHtmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) http.Handler {
+func (rend *defaultHtmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) Response {
 	var b bytes.Buffer
 	if err := rend.tmpl.ExecuteTemplate(&b, templateName, templateContext); err != nil {
 		panic(err)
