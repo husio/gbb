@@ -8,55 +8,49 @@ import (
 	"time"
 
 	"github.com/husio/gbb/pkg/surf"
-	"github.com/mattn/go-sqlite3"
+	"github.com/lib/pq"
 )
 
-func NewSqliteStore(db *sql.DB) BBStore {
-	return &sqliteStore{
+func NewPostgresStore(db *sql.DB) BBStore {
+	return &postgresStore{
 		db: db,
 	}
 }
 
-type sqliteStore struct {
+type postgresStore struct {
 	db *sql.DB
 }
 
 const schema = `
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS users (
-	user_id TEXT PRIMARY KEY,
+	user_id SERIAL PRIMARY KEY,
 	name TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS posts (
-	post_id TEXT PRIMARY KEY,
+	post_id SERIAL PRIMARY KEY,
 	title TEXT NOT NULL,
-	created DATETIME NOT NULL,
-	author_id TEXT NOT NULL,
+	created TIMESTAMPTZ NOT NULL,
+	author_id INTEGER NOT NULL REFERENCES users(user_id),
 
-	views_count INT NOT NULL default 0,
-	comments_count INT NOT NULL default 1,
-
-	FOREIGN KEY(author_id) REFERENCES users(user_id)
+	views_count INTEGER NOT NULL default 0 CHECK (views_count >= 0),
+	comments_count INTEGER NOT NULL default 1 CHECK (comments_count >= 0)
 );
 
 CREATE INDEX IF NOT EXISTS posts_created_idx ON posts(created);
 
 CREATE TABLE IF NOT EXISTS comments (
-	comment_id TEXT PRIMARY KEY,
-	post_id TEXT NOT NULL,
+	comment_id SERIAL PRIMARY KEY,
+	post_id INTEGER NOT NULL REFERENCES posts(post_id),
 	content TEXT NOT NULL,
-	created DATETIME NOT NULL,
-	author_id TEXT NOT NULL,
-
-	FOREIGN KEY(author_id) REFERENCES users(user_id),
-	FOREIGN KEY(post_id) REFERENCES posts(post_id)
+	created TIMESTAMPTZ NOT NULL,
+	author_id INTEGER NOT NULL REFERENCES users(user_id)
 );
 
 CREATE INDEX IF NOT EXISTS comments_created_idx ON comments(created);
 
-INSERT OR IGNORE INTO users VALUES ('rickybobby', "RickyBobby");
+INSERT INTO users (name) VALUES ('RickyBobby'), ('Micky Mouse'), ('Donald Duck')
+	ON CONFLICT DO NOTHING;
 `
 
 func EnsureSchema(db *sql.DB) error {
@@ -72,7 +66,7 @@ func EnsureSchema(db *sql.DB) error {
 	return nil
 }
 
-func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
+func (s *postgresStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
 	defer surf.CurrentTrace(ctx).Start("ListPosts", nil).Finish(nil)
 
 	surf.Info(ctx, "listing posts",
@@ -91,7 +85,7 @@ func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*P
 			posts p
 			INNER JOIN users u ON p.author_id = u.user_id
 		WHERE
-			p.created <= ?
+			p.created <= $1
 		ORDER BY
 			p.created ASC
 		LIMIT 1000
@@ -112,7 +106,7 @@ func (s *sqliteStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*P
 	return posts, nil
 }
 
-func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLte time.Time) (*Post, []*Comment, error) {
+func (s *postgresStore) ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error) {
 	span := surf.CurrentTrace(ctx).Start("ListComments", nil)
 	defer span.Finish(nil)
 
@@ -123,7 +117,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 	defer tx.Rollback()
 
 	var p Post
-	fetchPostSpan := span.Start("query post", map[string]string{"post": postID})
+	fetchPostSpan := span.Start("query post", map[string]string{"post": fmt.Sprint(postID)})
 	row := tx.QueryRowContext(ctx, `
 		SELECT
 			p.post_id,
@@ -137,7 +131,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 			posts p
 			INNER JOIN users u ON p.author_id = u.user_id
 		WHERE
-			p.post_id = ?
+			p.post_id = $1
 		LIMIT 1
 	`, postID)
 	fetchPostSpan.Finish(nil)
@@ -163,8 +157,8 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 			comments c
 			INNER JOIN users u ON c.author_id = u.user_id
 		WHERE
-			c.post_id = ?
-			AND c.created <= ?
+			c.post_id = $1
+			AND c.created <= $2
 		ORDER BY
 			c.created ASC
 		LIMIT
@@ -185,7 +179,7 @@ func (s *sqliteStore) ListComments(ctx context.Context, postID string, createdLt
 	return &p, comments, nil
 }
 
-func (s *sqliteStore) CreatePost(ctx context.Context, title, content, userID string) (*Post, *Comment, error) {
+func (s *postgresStore) CreatePost(ctx context.Context, title, content string, userID int64) (*Post, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Start("CreatePost", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
@@ -198,7 +192,7 @@ func (s *sqliteStore) CreatePost(ctx context.Context, title, content, userID str
 		UserID: userID,
 	}
 	err = tx.QueryRowContext(ctx, `
-		SELECT name FROM users WHERE user_id = ? LIMIT 1
+		SELECT name FROM users WHERE user_id = $1 LIMIT 1
 	`, userID).Scan(&user.Name)
 	switch castErr(err) {
 	case nil:
@@ -210,30 +204,30 @@ func (s *sqliteStore) CreatePost(ctx context.Context, title, content, userID str
 	}
 
 	post := Post{
-		PostID:  generateID(),
 		Title:   title,
 		Author:  user,
 		Created: time.Now().UTC(),
 	}
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO posts (post_id, title, created, author_id, views_count, comments_count)
-		VALUES (?, ?, ?, ?, 0, 1)
-	`, post.PostID, post.Title, post.Created, user.UserID)
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO posts (title, created, author_id, views_count, comments_count)
+		VALUES ($1, $2, $3, 0, 1)
+		RETURNING post_id
+	`, post.Title, post.Created, user.UserID).Scan(&post.PostID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create post: %s", err)
 	}
 
 	comment := Comment{
-		PostID:    post.PostID,
-		CommentID: generateID(),
-		Content:   content,
-		Created:   post.Created,
-		Author:    user,
+		PostID:  post.PostID,
+		Content: content,
+		Created: post.Created,
+		Author:  user,
 	}
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO comments (comment_id, post_id, content, created, author_id)
-		VALUES (?, ?, ?, ?, ?)
-	`, comment.CommentID, comment.PostID, comment.Content, comment.Created, user.UserID)
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO comments (post_id, content, created, author_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING comment_id
+	`, comment.PostID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create comment: %s", err)
 	}
@@ -244,7 +238,7 @@ func (s *sqliteStore) CreatePost(ctx context.Context, title, content, userID str
 	return &post, &comment, nil
 }
 
-func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID string) (*Comment, error) {
+func (s *postgresStore) CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error) {
 	defer surf.CurrentTrace(ctx).Start("CreateComment", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
@@ -257,7 +251,7 @@ func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID
 		UserID: userID,
 	}
 	err = tx.QueryRowContext(ctx, `
-		SELECT name FROM users WHERE user_id = ? LIMIT 1
+		SELECT name FROM users WHERE user_id = $1 LIMIT 1
 	`, userID).Scan(&user.Name)
 	switch castErr(err) {
 	case nil:
@@ -268,7 +262,7 @@ func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID
 		return nil, fmt.Errorf("cannot fetch user: %s", err)
 	}
 
-	switch result, err := tx.ExecContext(ctx, `UPDATE posts SET comments_count = comments_count + 1 WHERE post_id = ?`, postID); err {
+	switch result, err := tx.ExecContext(ctx, `UPDATE posts SET comments_count = comments_count + 1 WHERE post_id = $1`, postID); err {
 	case nil:
 		if n, err := result.RowsAffected(); err != nil || n != 1 {
 			return nil, ErrNotFound
@@ -278,16 +272,16 @@ func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID
 	}
 
 	comment := Comment{
-		PostID:    postID,
-		CommentID: generateID(),
-		Content:   content,
-		Created:   time.Now().UTC(),
-		Author:    user,
+		PostID:  postID,
+		Content: content,
+		Created: time.Now().UTC(),
+		Author:  user,
 	}
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO comments (comment_id, post_id, content, created, author_id)
-		VALUES (?, ?, ?, ?, ?)
-	`, comment.CommentID, comment.PostID, comment.Content, comment.Created, user.UserID)
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO comments (post_id, content, created, author_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING comment_id
+	`, comment.PostID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
 	switch err := castErr(err); err {
 	case nil:
 		// all good
@@ -303,12 +297,12 @@ func (s *sqliteStore) CreateComment(ctx context.Context, postID, content, userID
 	return &comment, nil
 }
 
-func (s *sqliteStore) IncrementPostView(ctx context.Context, postID string) error {
+func (s *postgresStore) IncrementPostView(ctx context.Context, postID int64) error {
 	defer surf.CurrentTrace(ctx).Start("IncrementPostView", nil).Finish(nil)
 
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE posts SET views_count = views_count + 1
-		WHERE post_id = ?
+		WHERE post_id = $1
 	`, postID)
 	if err != nil {
 		return fmt.Errorf("cannot execute query: %s", err)
@@ -323,9 +317,11 @@ func castErr(err error) error {
 		return ErrNotFound
 	}
 
-	if e, ok := err.(sqlite3.Error); ok {
-		switch e.Code {
-		case sqlite3.ErrConstraint:
+	if e, ok := err.(pq.Error); ok {
+		switch prefix := e.Code[:2]; prefix {
+		case "20":
+			return ErrNotFound
+		case "23":
 			return ErrConstraint
 		}
 	}

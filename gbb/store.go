@@ -8,20 +8,20 @@ import (
 
 type BBStore interface {
 	ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error)
-	ListComments(ctx context.Context, postID string, createdLte time.Time) (*Post, []*Comment, error)
-	CreatePost(ctx context.Context, title, content, userID string) (*Post, *Comment, error)
-	CreateComment(ctx context.Context, postID, content, userID string) (*Comment, error)
+	ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error)
+	CreatePost(ctx context.Context, title, content string, userID int64) (*Post, *Comment, error)
+	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
 
-	IncrementPostView(ctx context.Context, postID string) error
+	IncrementPostView(ctx context.Context, postID int64) error
 }
 
 type User struct {
-	UserID string
+	UserID int64
 	Name   string
 }
 
 type Post struct {
-	PostID  string
+	PostID  int64
 	Title   string
 	Created time.Time
 	Author  User
@@ -31,8 +31,8 @@ type Post struct {
 }
 
 type Comment struct {
-	CommentID string
-	PostID    string
+	CommentID int64
+	PostID    int64
 	Content   string
 	Created   time.Time
 	Author    User

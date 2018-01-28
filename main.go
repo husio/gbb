@@ -15,9 +15,9 @@ import (
 func main() {
 	logger := surf.NewLogger(os.Stderr)
 
-	db, err := sql.Open("sqlite3", "/tmp/gbb.sqlite.db")
+	db, err := sql.Open("postgres", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`)
 	if err != nil {
-		logger.Error(context.Background(), err, "cannot open sqlite database")
+		logger.Error(context.Background(), err, "cannot open SQL database")
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -27,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := gbb.NewSqliteStore(db)
+	store := gbb.NewPostgresStore(db)
 
 	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", template.FuncMap{
 		"markdown": func(s string) template.HTML {

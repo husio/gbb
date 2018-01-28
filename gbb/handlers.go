@@ -1,6 +1,8 @@
 package gbb
 
 import (
+	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -8,7 +10,9 @@ import (
 	"github.com/husio/gbb/pkg/surf"
 )
 
-const userID = "rickybobby"
+func userID() int64 {
+	return rand.Int63n(2) + 1
+}
 
 func PostListHandler(
 	store BBStore,
@@ -70,13 +74,14 @@ func PostCreateHandler(
 				return rend.Response(http.StatusBadRequest, "post_create.tmpl", content)
 			}
 
-			post, _, err := store.CreatePost(ctx, content.Title, content.Content, userID)
+			post, _, err := store.CreatePost(ctx, content.Title, content.Content, userID())
 			if err != nil {
 				surf.Error(ctx, err, "cannot create posts")
 				return surf.StdResponse(rend, http.StatusInternalServerError)
 			}
 
-			http.Redirect(w, r, "/p/"+post.PostID+"/#bottom", http.StatusSeeOther)
+			url := fmt.Sprintf("/p/%d/#bottom", post.PostID)
+			http.Redirect(w, r, url, http.StatusSeeOther)
 		}
 
 		return rend.Response(http.StatusOK, "post_create.tmpl", content)
@@ -95,7 +100,7 @@ func CommentListHandler(
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		postID := surf.PathArg(r, 0)
+		postID := surf.PathArgInt64(r, 0)
 		post, comments, err := store.ListComments(ctx, postID, time.Now())
 		switch err {
 		case nil:
@@ -105,13 +110,13 @@ func CommentListHandler(
 			return surf.StdResponse(rend, http.StatusNotFound)
 		default:
 			surf.Error(ctx, err, "cannot fetch post and comments",
-				"postID", postID)
+				"postID", fmt.Sprint(postID))
 			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
 
 		if err := store.IncrementPostView(ctx, postID); err != nil {
 			surf.Error(ctx, err, "cannot increment view counter",
-				"postID", post.PostID)
+				"postID", fmt.Sprint(post.PostID))
 		}
 
 		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
@@ -132,11 +137,11 @@ func CommentCreateHandler(
 			return surf.StdResponse(rend, http.StatusBadRequest)
 		}
 
-		postID := surf.PathArg(r, 0)
+		postID := surf.PathArgInt64(r, 0)
 		content := strings.TrimSpace(r.Form.Get("content"))
 
 		if len(content) > 0 {
-			switch _, err := store.CreateComment(ctx, postID, content, userID); err {
+			switch _, err := store.CreateComment(ctx, postID, content, userID()); err {
 			case nil:
 				// all good
 			case ErrNotFound:
@@ -144,11 +149,12 @@ func CommentCreateHandler(
 			default:
 				surf.Error(ctx, err, "cannot create comment",
 					"content", content,
-					"postID", postID)
+					"postID", fmt.Sprint(postID))
 				return surf.StdResponse(rend, http.StatusInternalServerError)
 			}
 		}
-		http.Redirect(w, r, "/p/"+postID+"/#bottom", http.StatusSeeOther)
+		url := fmt.Sprintf("/p/%d/#bottom", postID)
+		http.Redirect(w, r, url, http.StatusSeeOther)
 		return nil
 	}
 }
