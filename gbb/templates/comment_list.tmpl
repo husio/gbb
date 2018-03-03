@@ -1,10 +1,7 @@
 {{template "header.tmpl"}}
 <style>
-.comment { border: 1px solid #E6E6E6; background: #FCFCFC; padding: 10px; margin: 20px 0; }
-.comment-content h1 { font-size: 1.4em; }
-.comment-content h2 { font-size: 1.2em; }
-.comment-content h3 { font-size: 1.1em; }
-.comment-content h4 { font-size: 1em; }
+.comment { padding: 10px; margin: 20px 0; }
+.comment-content { padding-left: 20px; }
 </style>
 
 <body>
@@ -17,16 +14,14 @@
   <h1>{{.Post.Title}}</h1>
   {{range .Comments}}
     <div class="comment" id="comment-{{.CommentID}}">
+      <div class="comment-header">
+        <a href="/u/{{.Author.UserID}}">{{.Author.Name}}</a>
+        at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
+        | <a href="./#comment-{{.CommentID}}">link</a>
+      </div>
       <div class="comment-content">
         <p>{{.Content | markdown}}</p>
       </div>
-      <p>
-        <small>
-          <a href="./#comment-{{.CommentID}}">#</a>
-          by <a href="/u/{{.Author.UserID}}">{{.Author.Name}}</a>
-          at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
-        </small>
-      </p>
     </div>
   {{end}}
 

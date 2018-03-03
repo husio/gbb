@@ -32,27 +32,28 @@ type TraceSpan interface {
 	Finish(args map[string]string)
 }
 
-// GatherTrace attach trace to request's context with given frequency.
-func GatherTrace(frequency time.Duration, h http.Handler) http.HandlerFunc {
-	ticker := time.NewTicker(frequency)
+// TracingMiddleware provides trace in request's context with given frequency.
+func TracingMiddleware(frequency time.Duration) Middleware {
+	return func(h http.Handler) http.Handler {
+		ticker := time.NewTicker(frequency)
 
-	withtrace := func() bool {
-		select {
-		case <-ticker.C:
-			return true
-		default:
-			return false
-		}
-	}
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if withtrace() {
-			ctx, t := attachTrace(r.Context(), "ServeHTTP", "")
-			r = r.WithContext(ctx)
-			defer t.finalize()
+		withtrace := func() bool {
+			select {
+			case <-ticker.C:
+				return true
+			default:
+				return false
+			}
 		}
 
-		h.ServeHTTP(w, r)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if withtrace() {
+				ctx, t := attachTrace(r.Context(), "ServeHTTP", "")
+				r = r.WithContext(ctx)
+				defer t.finalize()
+			}
+			h.ServeHTTP(w, r)
+		})
 	}
 }
 

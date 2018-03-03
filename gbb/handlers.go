@@ -51,6 +51,7 @@ func PostCreateHandler(
 
 		if r.Method == "POST" {
 			if err := r.ParseMultipartForm(1e6); err != nil {
+				fmt.Println("Invalid content type", err)
 				return surf.StdResponse(rend, http.StatusBadRequest)
 			}
 

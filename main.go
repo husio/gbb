@@ -52,7 +52,7 @@ func main() {
 		renderer.Response(http.StatusOK, "post_list.tmpl", nil)
 	})
 
-	app := surf.NewHTTPApplication(rt, true, logger)
+	app := surf.NewHTTPApplication(rt, logger, true)
 
 	logger.Info(context.Background(), "starting server",
 		"port", "8000")

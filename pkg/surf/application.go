@@ -3,85 +3,61 @@ package surf
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"runtime/debug"
+	"time"
 )
 
-func NewHTTPApplication(h http.Handler, debug bool, logger Logger) http.Handler {
+func NewHTTPApplication(app http.Handler, logger Logger, debug bool) http.Handler {
+	middlewares := []Middleware{
+		PanicMiddleware(logger),
+		LoggingMiddleware(logger),
+		TracingMiddleware(time.Second),
+	}
+
 	if debug {
-		return &debugApplication{
-			logger:  logger,
-			handler: h,
-		}
+		middlewares = append(middlewares, DebugToolbarMiddleware("/_/debugtoolbar/"))
 	}
-	return &productionApplication{
-		logger:  logger,
-		handler: h,
-	}
+
+	return WithMiddlewares(app, middlewares)
 }
 
-type productionApplication struct {
-	logger  Logger
-	handler http.Handler
-}
+func PanicMiddleware(logger Logger) Middleware {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				panicErr := recover()
+				if panicErr == nil {
+					return
+				}
 
-func (app *productionApplication) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	ctx = attachLogger(ctx, app.logger)
+				err, ok := panicErr.(error)
+				if !ok {
+					err = fmt.Errorf("panic: %s", panicErr)
+				}
+				logger.Error(r.Context(), err, "panic")
 
-	app.handler.ServeHTTP(w, r.WithContext(ctx))
-}
+				w.WriteHeader(http.StatusInternalServerError)
+				// TODO make stack nice
 
-type debugApplication struct {
-	logger  Logger
-	handler http.Handler
-}
+				stack, err := stackInformation(1, 8)
+				if err != nil {
+					panic("cannot read stack information: " + err.Error())
+				}
+				defaultTemplate().ExecuteTemplate(w, "surf/panic_error.tmpl", struct {
+					Request   *http.Request
+					PanicErr  interface{}
+					Stack     []stackLine
+					FullStack string
+				}{
+					Request:   r,
+					PanicErr:  panicErr,
+					Stack:     stack,
+					FullStack: string(debug.Stack()),
+				})
 
-func (app *debugApplication) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+			}()
 
-	var logRec logRecorder
-	ctx = attachLogger(ctx, broadcastLogs(app.logger, &logRec))
-
-	ctx, tr := attachTrace(ctx, "Handler", "")
-
-	defer func() {
-		tr.finalize()
-
-		err := renderDebugToolbar(w, debugToolbarContext{
-			TraceSpans: tr.spans,
-			LogEntries: logRec.entries,
+			h.ServeHTTP(w, r)
 		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "cannot render debug toolbar template: %s", err)
-		}
-	}()
-	defer handlePanic(w, r)
-
-	app.handler.ServeHTTP(w, r.WithContext(ctx))
-}
-
-func handlePanic(w http.ResponseWriter, r *http.Request) {
-	panicErr := recover()
-	if panicErr == nil {
-		return
 	}
-
-	w.WriteHeader(http.StatusInternalServerError)
-	// TODO make stack nice
-	stack, err := stackInformation(1, 8)
-	if err != nil {
-		panic("cannot read stack information: " + err.Error())
-	}
-	defaultTemplate().ExecuteTemplate(w, "surf/panic_error.tmpl", struct {
-		Request   *http.Request
-		PanicErr  interface{}
-		Stack     []stackLine
-		FullStack string
-	}{
-		Request:   r,
-		PanicErr:  panicErr,
-		Stack:     stack,
-		FullStack: string(debug.Stack()),
-	})
 }

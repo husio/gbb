@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -13,6 +14,16 @@ import (
 type Logger interface {
 	Info(context.Context, string, ...string)
 	Error(context.Context, error, string, ...string)
+}
+
+func LoggingMiddleware(logger Logger) Middleware {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := attachLogger(r.Context(), logger)
+			r = r.WithContext(ctx)
+			h.ServeHTTP(w, r)
+		})
+	}
 }
 
 func attachLogger(ctx context.Context, logger Logger) context.Context {
