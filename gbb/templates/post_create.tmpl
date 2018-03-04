@@ -1,12 +1,15 @@
 {{template "header.tmpl"}}
+<style>
+textarea { min-height: 300px; }
+</style>
 
 <form method="POST" action="." enctype="multipart/form-data">
-  <input type="text" name="title" value="{{.Title}}">
-  {{if .Errors.Title -}}
-    <div>{{.Errors.Title}}</div>
+  <input type="text" name="subject" value="{{.Subject}}" placeholder="Subject">
+  {{if .Errors.Subject -}}
+    <div>{{.Errors.Subject}}</div>
   {{- end}}
 
-  <textarea name="content">{{.Content}}</textarea>
+  <textarea name="content" placeholder="Content">{{.Content}}</textarea>
   {{if .Errors.Content -}}
     <div>{{.Errors.Content}}</div>
   {{- end}}

@@ -11,7 +11,7 @@
     <a href="/p/">Back to listing</a>
   </p>
 
-  <h1>{{.Post.Title}}</h1>
+  <h1>{{.Post.Subject}}</h1>
   {{range .Comments}}
     <div class="comment" id="comment-{{.CommentID}}">
       <div class="comment-header">
@@ -31,8 +31,8 @@
     <a href="/p/">Back to listing</a>
   </p>
 
-  <form method="POST" action="./comment/" enctype="multipart/form-data">
-    <textarea name="content" required></textarea>
+  <form method="POST" action="/p/{{.Post.PostID}}/comment/" enctype="multipart/form-data">
+    <textarea name="content" required placeholder="Write your comment"></textarea>
     <button type="submit">Comment</button>
   </form>
 

@@ -1,27 +1,23 @@
 {{template "header.tmpl"}}
 
+<style>
+.post { margin: 8px 0; }
+.post-tagline { font-size:80%; padding-left: 10px; color: #444; }
+</style>
+
 <body>
   {{if .Posts}}
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Author</th>
-          <th>&#128065;</th>
-          <th>&#128172;</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Posts}}
-          <tr>
-            <td><a href="/p/{{.PostID}}/">{{.Title}}</a></td>
-            <td>{{.Author.Name}}</td>
-            <td>{{.ViewsCount}}</td>
-            <td>{{.CommentsCount}}</td>
-          </tr>
-        {{end}}
-      </tbody>
-    </table>
+      {{range .Posts}}
+        <div class="post">
+          <a href="/p/{{.PostID}}/{{.SlugInfo}}/">{{.Subject}}</a>
+          <div class="post-tagline">
+            Created by <em>{{.Author.Name}}</em>
+            {{.Created | timeago}},
+            {{.ViewsCount}} view{{if ne .ViewsCount 1}}s{{end}},
+            {{.CommentsCount}} comment{{if ne .CommentsCount 1}}s{{end}}
+          </div>
+        </div>
+      {{end}}
   {{else}}
     <div>No posts</div>
   {{end}}

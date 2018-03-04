@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS posts (
 	post_id SERIAL PRIMARY KEY,
-	title TEXT NOT NULL,
+	subject TEXT NOT NULL,
 	created TIMESTAMPTZ NOT NULL,
 	author_id INTEGER NOT NULL REFERENCES users(user_id),
 
@@ -75,7 +75,7 @@ func (s *postgresStore) ListPosts(ctx context.Context, createdLte time.Time) ([]
 	resp, err := s.db.QueryContext(ctx, `
 		SELECT
 			p.post_id,
-			p.title,
+			p.subject,
 			p.created,
 			p.views_count,
 			p.comments_count,
@@ -97,7 +97,7 @@ func (s *postgresStore) ListPosts(ctx context.Context, createdLte time.Time) ([]
 
 	for resp.Next() {
 		var p Post
-		if err := resp.Scan(&p.PostID, &p.Title, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); err != nil {
+		if err := resp.Scan(&p.PostID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); err != nil {
 			return posts, fmt.Errorf("cannot scan row: %s", err)
 		}
 
@@ -121,7 +121,7 @@ func (s *postgresStore) ListComments(ctx context.Context, postID int64, createdL
 	row := tx.QueryRowContext(ctx, `
 		SELECT
 			p.post_id,
-			p.title,
+			p.subject,
 			p.created,
 			p.views_count,
 			p.comments_count,
@@ -135,7 +135,7 @@ func (s *postgresStore) ListComments(ctx context.Context, postID int64, createdL
 		LIMIT 1
 	`, postID)
 	fetchPostSpan.Finish(nil)
-	switch err := row.Scan(&p.PostID, &p.Title, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); castErr(err) {
+	switch err := row.Scan(&p.PostID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); castErr(err) {
 	case nil:
 		// all good
 	case ErrNotFound:
@@ -179,7 +179,7 @@ func (s *postgresStore) ListComments(ctx context.Context, postID int64, createdL
 	return &p, comments, nil
 }
 
-func (s *postgresStore) CreatePost(ctx context.Context, title, content string, userID int64) (*Post, *Comment, error) {
+func (s *postgresStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Start("CreatePost", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
@@ -204,15 +204,15 @@ func (s *postgresStore) CreatePost(ctx context.Context, title, content string, u
 	}
 
 	post := Post{
-		Title:   title,
+		Subject: subject,
 		Author:  user,
 		Created: time.Now().UTC(),
 	}
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO posts (title, created, author_id, views_count, comments_count)
-		VALUES ($1, $2, $3, 0, 1)
+		INSERT INTO posts (subject, created, author_id, views_count, comments_count)
+		VALUES ($1, $2, $3, 0, 0)
 		RETURNING post_id
-	`, post.Title, post.Created, user.UserID).Scan(&post.PostID)
+	`, post.Subject, post.Created, user.UserID).Scan(&post.PostID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create post: %s", err)
 	}

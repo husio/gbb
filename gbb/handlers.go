@@ -40,7 +40,7 @@ func PostCreateHandler(
 	rend surf.Renderer,
 ) surf.HandlerFunc {
 	type Content struct {
-		Title   string
+		Subject string
 		Content string
 		Errors  map[string]string
 	}
@@ -57,11 +57,11 @@ func PostCreateHandler(
 
 			content.Errors = make(map[string]string)
 
-			content.Title = strings.TrimSpace(r.Form.Get("title"))
-			if titleLen := len(content.Title); titleLen == 0 {
-				content.Errors["Title"] = "Title is required."
-			} else if titleLen < 2 {
-				content.Errors["Title"] = "Too short. Must be at least 2 characters"
+			content.Subject = strings.TrimSpace(r.Form.Get("subject"))
+			if sLen := len(content.Subject); sLen == 0 {
+				content.Errors["Subject"] = "Subject is required."
+			} else if sLen < 2 {
+				content.Errors["Subject"] = "Too short. Must be at least 2 characters"
 			}
 
 			content.Content = strings.TrimSpace(r.Form.Get("content"))
@@ -75,7 +75,7 @@ func PostCreateHandler(
 				return rend.Response(http.StatusBadRequest, "post_create.tmpl", content)
 			}
 
-			post, _, err := store.CreatePost(ctx, content.Title, content.Content, userID())
+			post, _, err := store.CreatePost(ctx, content.Subject, content.Content, userID())
 			if err != nil {
 				surf.Error(ctx, err, "cannot create posts")
 				return surf.StdResponse(rend, http.StatusInternalServerError)

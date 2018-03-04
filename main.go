@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"html/template"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/husio/gbb/gbb"
 	"github.com/husio/gbb/pkg/surf"
@@ -34,6 +36,11 @@ func main() {
 			html := github_flavored_markdown.Markdown([]byte(s))
 			return template.HTML(html)
 		},
+		"timeago": func(t time.Time) template.HTML {
+			ago := timeago(t)
+			html := fmt.Sprintf(`<span title="%s">%s</span>`, t.Format("Mon, Jan 2 2006, 15:04"), ago)
+			return template.HTML(html)
+		},
 	})
 
 	rt := surf.NewRouter()
@@ -42,7 +49,7 @@ func main() {
 	rt.Get(`/p/`, gbb.PostListHandler(store, renderer))
 	rt.Get(`/p/new/`, gbb.PostCreateHandler(store, renderer))
 	rt.Post(`/p/new/`, gbb.PostCreateHandler(store, renderer))
-	rt.Get(`/p/<post-id:[^/]+>/`, gbb.CommentListHandler(store, renderer))
+	rt.Get(`/p/<post-id:[^/]+>/.*`, gbb.CommentListHandler(store, renderer))
 	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(store, renderer))
 
 	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
@@ -59,4 +66,25 @@ func main() {
 	if err := http.ListenAndServe(":8000", app); err != nil {
 		logger.Error(context.Background(), err, "HTTP server failed")
 	}
+}
+
+func timeago(t time.Time) string {
+	age := time.Now().Sub(t)
+
+	if d := age / (24 * time.Hour); d == 1 {
+		return "1 day ago"
+	} else if d > 0 {
+		return fmt.Sprintf("%d days ago", d)
+	}
+	if h := age / time.Hour; h == 1 {
+		return "1 hour ago"
+	} else if h > 0 {
+		return fmt.Sprintf("%d hours ago", h)
+	}
+	if m := age / time.Minute; m == 1 {
+		return "1 minute ago"
+	} else if m > 0 {
+		return fmt.Sprintf("%d minutes ago", m)
+	}
+	return "just now"
 }
