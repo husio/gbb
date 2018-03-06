@@ -1,0 +1,16 @@
+{{template "header.tmpl"}}
+
+<form method="POST" action="." enctype="multipart/form-data">
+  <input type="text" name="login" value="{{.Login}}" placeholder="Login" required>
+  {{if .Errors.Login -}}
+    <div>{{.Errors.Login}}</div>
+  {{- end}}
+
+  <input name="password" type="password" placeholder="Password" required>
+  {{if .Errors.Password -}}
+    <div>{{.Errors.Password}}</div>
+  {{- end}}
+  <input name="password2" type="password" placeholder="Password (repeat)" required>
+
+  <button type="submit">Register</button>
+</form>

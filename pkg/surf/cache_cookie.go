@@ -69,6 +69,8 @@ type cookieCache struct {
 }
 
 func (s *cookieCache) Get(ctx context.Context, key string, dest interface{}) error {
+	defer CurrentTrace(ctx).Start("cookie cache get", map[string]string{"key": key}).Finish(nil)
+
 	if rawVal, ok := s.staged[key]; ok {
 		if err := json.Unmarshal(rawVal, dest); err != nil {
 			return fmt.Errorf("cannot decode staged value: %s", err)
@@ -109,6 +111,8 @@ func (s *cookieCache) signature(data []byte) []byte {
 }
 
 func (s *cookieCache) Set(ctx context.Context, key string, value interface{}, exp time.Duration) error {
+	defer CurrentTrace(ctx).Start("cookie cache set", map[string]string{"key": key}).Finish(nil)
+
 	return s.set(key, value, exp)
 }
 
@@ -129,10 +133,12 @@ func (s *cookieCache) set(key string, value interface{}, exp time.Duration) erro
 	}
 
 	http.SetCookie(s.w, &http.Cookie{
-		Name:    s.prefix + key,
-		Value:   payload,
-		Path:    "/",
-		Expires: expAt,
+		Name:     s.prefix + key,
+		Value:    payload,
+		Path:     "/",
+		Expires:  expAt,
+		HttpOnly: true,
+		//Secure:   true,
 	})
 	s.staged[key] = rawPayload
 	return nil
@@ -182,6 +188,8 @@ func (s *cookieCache) SetNx(ctx context.Context, key string, value interface{}, 
 }
 
 func (s *cookieCache) Del(ctx context.Context, key string) error {
+	defer CurrentTrace(ctx).Start("cookie cache del", map[string]string{"key": key}).Finish(nil)
+
 	return s.del(key)
 }
 

@@ -14,6 +14,8 @@ import (
 	"github.com/shurcooL/github_flavored_markdown"
 )
 
+const secret = "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas"
+
 func main() {
 	logger := surf.NewLogger(os.Stderr)
 
@@ -29,7 +31,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := gbb.NewPostgresStore(db)
+	bbStore := gbb.NewPostgresBBStore(db)
+	userStore := gbb.NewPostgresUserStore(db)
 
 	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", template.FuncMap{
 		"markdown": func(s string) template.HTML {
@@ -43,14 +46,25 @@ func main() {
 		},
 	})
 
+	unboundCache, err := surf.NewCookieCache("", []byte(secret))
+	if err != nil {
+		logger.Error(context.Background(), err, "cannot create cookie cache")
+		os.Exit(1)
+	}
+
 	rt := surf.NewRouter()
 
 	rt.Get(`/`, http.RedirectHandler("/p/", http.StatusTemporaryRedirect))
-	rt.Get(`/p/`, gbb.PostListHandler(store, renderer))
-	rt.Get(`/p/new/`, gbb.PostCreateHandler(store, renderer))
-	rt.Post(`/p/new/`, gbb.PostCreateHandler(store, renderer))
-	rt.Get(`/p/<post-id:[^/]+>/.*`, gbb.CommentListHandler(store, renderer))
-	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(store, renderer))
+	rt.Get(`/p/`, gbb.PostListHandler(bbStore, renderer))
+	rt.Get(`/p/new/`, gbb.PostCreateHandler(bbStore, unboundCache, renderer))
+	rt.Post(`/p/new/`, gbb.PostCreateHandler(bbStore, unboundCache, renderer))
+	rt.Get(`/p/<post-id:[^/]+>/.*`, gbb.CommentListHandler(bbStore, renderer))
+	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(bbStore, unboundCache, renderer))
+	rt.Get(`/login/`, gbb.LoginHandler(unboundCache, userStore, renderer))
+	rt.Post(`/login/`, gbb.LoginHandler(unboundCache, userStore, renderer))
+	rt.Post(`/logout/`, gbb.LogoutHandler(unboundCache))
+	rt.Get(`/register/`, gbb.RegisterHandler(unboundCache, userStore, renderer))
+	rt.Post(`/register/`, gbb.RegisterHandler(unboundCache, userStore, renderer))
 
 	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
 		renderer.Response(http.StatusOK, "ghost_template.tmpl", nil)

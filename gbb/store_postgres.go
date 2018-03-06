@@ -11,19 +11,30 @@ import (
 	"github.com/lib/pq"
 )
 
-func NewPostgresStore(db *sql.DB) BBStore {
-	return &postgresStore{
+func NewPostgresBBStore(db *sql.DB) BBStore {
+	return &pgBBStore{
 		db: db,
 	}
 }
 
-type postgresStore struct {
+type pgBBStore struct {
+	db *sql.DB
+}
+
+func NewPostgresUserStore(db *sql.DB) UserStore {
+	return &pgUserStore{
+		db: db,
+	}
+}
+
+type pgUserStore struct {
 	db *sql.DB
 }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS users (
 	user_id SERIAL PRIMARY KEY,
+	password TEXT NOT NULL,
 	name TEXT NOT NULL
 );
 
@@ -49,8 +60,6 @@ CREATE TABLE IF NOT EXISTS comments (
 
 CREATE INDEX IF NOT EXISTS comments_created_idx ON comments(created);
 
-INSERT INTO users (name) VALUES ('RickyBobby'), ('Micky Mouse'), ('Donald Duck')
-	ON CONFLICT DO NOTHING;
 `
 
 func EnsureSchema(db *sql.DB) error {
@@ -66,7 +75,7 @@ func EnsureSchema(db *sql.DB) error {
 	return nil
 }
 
-func (s *postgresStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
+func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
 	defer surf.CurrentTrace(ctx).Start("ListPosts", nil).Finish(nil)
 
 	surf.Info(ctx, "listing posts",
@@ -106,7 +115,7 @@ func (s *postgresStore) ListPosts(ctx context.Context, createdLte time.Time) ([]
 	return posts, nil
 }
 
-func (s *postgresStore) ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error) {
+func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error) {
 	span := surf.CurrentTrace(ctx).Start("ListComments", nil)
 	defer span.Finish(nil)
 
@@ -179,7 +188,7 @@ func (s *postgresStore) ListComments(ctx context.Context, postID int64, createdL
 	return &p, comments, nil
 }
 
-func (s *postgresStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
+func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Start("CreatePost", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
@@ -238,7 +247,7 @@ func (s *postgresStore) CreatePost(ctx context.Context, subject, content string,
 	return &post, &comment, nil
 }
 
-func (s *postgresStore) CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error) {
+func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error) {
 	defer surf.CurrentTrace(ctx).Start("CreateComment", nil).Finish(nil)
 
 	tx, err := s.db.Begin()
@@ -297,7 +306,7 @@ func (s *postgresStore) CreateComment(ctx context.Context, postID int64, content
 	return &comment, nil
 }
 
-func (s *postgresStore) IncrementPostView(ctx context.Context, postID int64) error {
+func (s *pgBBStore) IncrementPostView(ctx context.Context, postID int64) error {
 	defer surf.CurrentTrace(ctx).Start("IncrementPostView", nil).Finish(nil)
 
 	_, err := s.db.ExecContext(ctx, `
@@ -327,4 +336,30 @@ func castErr(err error) error {
 	}
 
 	return err
+}
+
+func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) (*User, error) {
+	var u User
+	// YOLO!
+	// add password authentication
+	err := s.db.QueryRow(`
+		SELECT user_id, name
+		FROM users
+		WHERE name = $1
+		LIMIT 1
+	`, login).Scan(&u.UserID, &u.Name)
+
+	return &u, castErr(err)
+}
+
+func (s *pgUserStore) Register(ctx context.Context, password string, u User) (*User, error) {
+	err := s.db.QueryRow(`
+		INSERT INTO users (password, name)
+		VALUES ($1, $2)
+		RETURNING user_id
+	`, password, u.Name).Scan(&u.UserID)
+	if err := castErr(err); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }

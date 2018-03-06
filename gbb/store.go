@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+type UserStore interface {
+	Register(ctx context.Context, password string, u User) (*User, error)
+	Authenticate(ctx context.Context, login, password string) (*User, error)
+}
+
 type BBStore interface {
 	ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error)
 	ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error)

@@ -26,3 +26,7 @@ var ErrUnauthenticated = errors.New("not authenticated")
 func Login(ctx context.Context, boundCache surf.CacheService, u User) error {
 	return boundCache.Set(ctx, "user", u, 6*time.Hour)
 }
+
+func Logout(ctx context.Context, boundCache surf.CacheService) error {
+	return boundCache.Del(ctx, "user")
+}
