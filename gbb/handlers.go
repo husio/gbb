@@ -327,3 +327,21 @@ func RegisterHandler(
 		}
 	}
 }
+
+func MeHandler(
+	unboundCache surf.UnboundCacheService,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		switch user, err := CurrentUser(ctx, unboundCache.Bind(w, r)); err {
+		case nil:
+			surf.JSONResp(w, http.StatusOK, user)
+		case ErrUnauthenticated:
+			surf.StdJSONResp(w, http.StatusUnauthorized)
+		default:
+			surf.StdJSONResp(w, http.StatusInternalServerError)
+		}
+		return nil
+	}
+}

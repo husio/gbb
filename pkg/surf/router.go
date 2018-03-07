@@ -124,7 +124,7 @@ type endpoint struct {
 
 func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h := rt.HandleHTTPRequest(w, r); h != nil {
-		defer CurrentTrace(r.Context()).Start("Writing response", nil).Finish(nil)
+		defer CurrentTrace(r.Context()).Begin("writing response").Finish()
 		h.ServeHTTP(w, r)
 	}
 }

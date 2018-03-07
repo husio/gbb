@@ -76,7 +76,7 @@ func EnsureSchema(db *sql.DB) error {
 }
 
 func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
-	defer surf.CurrentTrace(ctx).Start("ListPosts", nil).Finish(nil)
+	defer surf.CurrentTrace(ctx).Begin("list posts").Finish()
 
 	surf.Info(ctx, "listing posts",
 		"createdLte", createdLte.String())
@@ -116,8 +116,8 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Pos
 }
 
 func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error) {
-	span := surf.CurrentTrace(ctx).Start("ListComments", nil)
-	defer span.Finish(nil)
+	span := surf.CurrentTrace(ctx).Begin("list comments")
+	defer span.Finish()
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -126,7 +126,8 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 	defer tx.Rollback()
 
 	var p Post
-	fetchPostSpan := span.Start("query post", map[string]string{"post": fmt.Sprint(postID)})
+	fetchPostSpan := span.Begin("query post",
+		"post", fmt.Sprint(postID))
 	row := tx.QueryRowContext(ctx, `
 		SELECT
 			p.post_id,
@@ -143,7 +144,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 			p.post_id = $1
 		LIMIT 1
 	`, postID)
-	fetchPostSpan.Finish(nil)
+	fetchPostSpan.Finish()
 	switch err := row.Scan(&p.PostID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); castErr(err) {
 	case nil:
 		// all good
@@ -154,7 +155,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 	}
 
 	var comments []*Comment
-	defer span.Start("fetch comments", nil).Finish(nil)
+	fetchCommentSpan := span.Begin("fetch comments")
 	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			c.comment_id,
@@ -173,6 +174,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 		LIMIT
 			1000
 	`, p.PostID, createdLte)
+	fetchCommentSpan.Finish()
 	if err != nil {
 		return &p, nil, fmt.Errorf("cannot fetch comments: %s", err)
 	}
@@ -189,7 +191,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 }
 
 func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
-	defer surf.CurrentTrace(ctx).Start("CreatePost", nil).Finish(nil)
+	defer surf.CurrentTrace(ctx).Begin("create post").Finish()
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -248,7 +250,7 @@ func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, use
 }
 
 func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error) {
-	defer surf.CurrentTrace(ctx).Start("CreateComment", nil).Finish(nil)
+	defer surf.CurrentTrace(ctx).Begin("create comment").Finish()
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -307,7 +309,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 }
 
 func (s *pgBBStore) IncrementPostView(ctx context.Context, postID int64) error {
-	defer surf.CurrentTrace(ctx).Start("IncrementPostView", nil).Finish(nil)
+	defer surf.CurrentTrace(ctx).Begin("increment post view").Finish()
 
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE posts SET views_count = views_count + 1

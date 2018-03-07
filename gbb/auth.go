@@ -3,6 +3,7 @@ package gbb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/husio/gbb/pkg/surf"
@@ -11,12 +12,19 @@ import (
 func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, error) {
 	var u User
 
+	span := surf.CurrentTrace(ctx).Begin("current user")
+
 	switch err := boundCache.Get(ctx, "user", &u); err {
 	case nil:
+		span.Finish(
+			"id", fmt.Sprint(u.UserID),
+			"name", u.Name)
 		return &u, nil
 	case surf.ErrMiss:
+		span.Finish()
 		return nil, ErrUnauthenticated
 	default:
+		span.Finish()
 		return nil, err
 	}
 }

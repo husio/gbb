@@ -66,6 +66,8 @@ func main() {
 	rt.Get(`/register/`, gbb.RegisterHandler(unboundCache, userStore, renderer))
 	rt.Post(`/register/`, gbb.RegisterHandler(unboundCache, userStore, renderer))
 
+	rt.Get(`/api/me/`, gbb.MeHandler(unboundCache))
+
 	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
 		renderer.Response(http.StatusOK, "ghost_template.tmpl", nil)
 	})

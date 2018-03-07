@@ -69,7 +69,9 @@ type cookieCache struct {
 }
 
 func (s *cookieCache) Get(ctx context.Context, key string, dest interface{}) error {
-	defer CurrentTrace(ctx).Start("cookie cache get", map[string]string{"key": key}).Finish(nil)
+	defer CurrentTrace(ctx).Begin("cookie cache get",
+		"key", key,
+	).Finish()
 
 	if rawVal, ok := s.staged[key]; ok {
 		if err := json.Unmarshal(rawVal, dest); err != nil {
@@ -111,7 +113,10 @@ func (s *cookieCache) signature(data []byte) []byte {
 }
 
 func (s *cookieCache) Set(ctx context.Context, key string, value interface{}, exp time.Duration) error {
-	defer CurrentTrace(ctx).Start("cookie cache set", map[string]string{"key": key}).Finish(nil)
+	defer CurrentTrace(ctx).Begin("cookie cache set",
+		"key", key,
+		"exp", fmt.Sprint(exp),
+	).Finish()
 
 	return s.set(key, value, exp)
 }
@@ -188,7 +193,9 @@ func (s *cookieCache) SetNx(ctx context.Context, key string, value interface{}, 
 }
 
 func (s *cookieCache) Del(ctx context.Context, key string) error {
-	defer CurrentTrace(ctx).Start("cookie cache del", map[string]string{"key": key}).Finish(nil)
+	defer CurrentTrace(ctx).Begin("cookie cache del",
+		"key", key,
+	).Finish()
 
 	return s.del(key)
 }

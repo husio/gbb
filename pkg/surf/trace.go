@@ -22,14 +22,14 @@ func CurrentTrace(ctx context.Context) TraceSpan {
 }
 
 type TraceSpan interface {
-	// Start creates and remove new measurement span. Current span is set
+	// Begin creates and remove new measurement span. Current span is set
 	// as parent of newly created and returned one.
 	//
 	// It is users responsibility to finish span.
-	Start(description string, args map[string]string) TraceSpan
+	Begin(description string, keyvalues ...string) TraceSpan
 
 	// Finish close given span and finalize measurement.
-	Finish(args map[string]string)
+	Finish(keyvalues ...string)
 }
 
 // TracingMiddleware provides trace in request's context with given frequency.
@@ -62,11 +62,11 @@ func attachTrace(ctx context.Context, name, parent string) (context.Context, *tr
 		now: time.Now,
 		spans: []*span{
 			{
-				ID:          generateID(),
-				Parent:      parent,
-				Description: name,
-				Args:        nil,
-				Begin:       time.Now(),
+				id:          generateID(),
+				parent:      parent,
+				description: name,
+				args:        nil,
+				begin:       time.Now(),
 			},
 		},
 	}
@@ -87,8 +87,8 @@ func (tr *trace) finalize() {
 	tr.mu.Lock()
 	now := tr.now()
 	for _, s := range tr.spans {
-		if s.End == nil {
-			s.End = &now
+		if s.end == nil {
+			s.end = &now
 		}
 	}
 	tr.mu.Unlock()
@@ -97,22 +97,25 @@ func (tr *trace) finalize() {
 type span struct {
 	trace *trace
 
-	ID          string
-	Parent      string
-	Description string
-	Args        map[string]string
-	Begin       time.Time
-	End         *time.Time
+	id          string
+	parent      string
+	description string
+	args        []string
+	begin       time.Time
+	end         *time.Time
 }
 
-func (s *span) Start(description string, args map[string]string) TraceSpan {
+func (s *span) Begin(description string, keyvalues ...string) TraceSpan {
+	if len(keyvalues)%2 == 1 {
+		keyvalues = append(keyvalues, "")
+	}
 	ns := &span{
 		trace:       s.trace,
-		ID:          generateID(),
-		Parent:      s.ID,
-		Description: description,
-		Begin:       s.trace.now(),
-		Args:        args,
+		id:          generateID(),
+		parent:      s.id,
+		description: description,
+		begin:       s.trace.now(),
+		args:        keyvalues,
 	}
 
 	s.trace.mu.Lock()
@@ -122,22 +125,17 @@ func (s *span) Start(description string, args map[string]string) TraceSpan {
 	return ns
 }
 
-func (s *span) Finish(args map[string]string) {
+func (s *span) Finish(keyvalues ...string) {
 	now := s.trace.now()
-	s.End = &now
+	s.end = &now
 
-	if args != nil {
-		if s.Args == nil {
-			s.Args = args
-		} else {
-			for k, v := range args {
-				s.Args[k] = v
-			}
-		}
+	if len(keyvalues)%2 == 1 {
+		keyvalues = append(keyvalues, "")
 	}
+	s.args = append(s.args, keyvalues...)
 }
 
 type discardTraceSpan struct{}
 
-func (d discardTraceSpan) Start(string, map[string]string) TraceSpan { return d }
-func (discardTraceSpan) Finish(map[string]string)                    {}
+func (d discardTraceSpan) Begin(string, ...string) TraceSpan { return d }
+func (d discardTraceSpan) Finish(...string)                  {}
