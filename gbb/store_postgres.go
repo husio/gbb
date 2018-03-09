@@ -96,7 +96,7 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Pos
 		WHERE
 			p.created <= $1
 		ORDER BY
-			p.created ASC
+			p.created DESC
 		LIMIT 1000
 	`, createdLte)
 	if err != nil {

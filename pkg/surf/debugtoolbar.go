@@ -50,9 +50,11 @@ func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 	dt.handler.ServeHTTP(w, r)
 
-	fmt.Fprintf(w, `
-		<a style="position:absolute;top:4px;right:4px;" target="_blank" href="%s?req=%s">DT</a>
-	`, dt.rootPath, debugID)
+	if w.Header().Get("Content-Type") == "text/html" {
+		fmt.Fprintf(w, `
+			<a style="position:absolute;top:4px;right:4px;" target="_blank" href="%s?req=%s">DT</a>
+		`, dt.rootPath, debugID)
+	}
 
 	var traceSpans []*span
 	if tr, ok := ctx.Value("surf:trace").(*trace); ok {
@@ -140,18 +142,14 @@ var tmpl = template.Must(template.New("").Parse(`
 		<h2>Traces</h2>
 		<table>
 		<tr>
-			<th>Span ID</th>
-			<th>Parent ID</th>
 			<th>Description</th>
 			<th>Duration</th>
 			<th>Args</th>
 		</tr>
 		{{range .TraceSpans}}
 			<tr>
-				<td>{{.ID}}</td>
-				<td>{{.Parent}}</td>
 				<td>{{.Description}}</td>
-				<td>{{.End.Sub .Begin}}</td>
+				<td>{{.End.Sub .Start}}</td>
 				<td>{{if .Args}}{{.Args}}{{else}}-{{end}}</td>
 			</tr>
 		{{end}}

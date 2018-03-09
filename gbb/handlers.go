@@ -184,14 +184,14 @@ func CommentCreateHandler(
 }
 
 func LoginHandler(
-	unboundCache surf.UnboundCacheService,
+	authStore surf.UnboundCacheService,
 	users UserStore,
 	rend surf.Renderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		boundCache := unboundCache.Bind(w, r)
+		boundCache := authStore.Bind(w, r)
 
 		var errors []string
 
@@ -243,11 +243,11 @@ func LoginHandler(
 }
 
 func LogoutHandler(
-	unboundCache surf.UnboundCacheService,
+	authStore surf.UnboundCacheService,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
-		if err := Logout(ctx, unboundCache.Bind(w, r)); err != nil {
+		if err := Logout(ctx, authStore.Bind(w, r)); err != nil {
 			surf.Error(ctx, err, "cannot logout user")
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -256,7 +256,7 @@ func LogoutHandler(
 }
 
 func RegisterHandler(
-	unboundCache surf.UnboundCacheService,
+	authStore surf.UnboundCacheService,
 	users UserStore,
 	rend surf.Renderer,
 ) surf.HandlerFunc {
@@ -268,7 +268,7 @@ func RegisterHandler(
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		boundCache := unboundCache.Bind(w, r)
+		boundCache := authStore.Bind(w, r)
 
 		if _, err := CurrentUser(ctx, boundCache); err == nil {
 			return rend.Response(http.StatusBadRequest, "error_4xx.tmpl", "Already logged in")
@@ -329,12 +329,12 @@ func RegisterHandler(
 }
 
 func MeHandler(
-	unboundCache surf.UnboundCacheService,
+	authStore surf.UnboundCacheService,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		switch user, err := CurrentUser(ctx, unboundCache.Bind(w, r)); err {
+		switch user, err := CurrentUser(ctx, authStore.Bind(w, r)); err {
 		case nil:
 			surf.JSONResp(w, http.StatusOK, user)
 		case ErrUnauthenticated:

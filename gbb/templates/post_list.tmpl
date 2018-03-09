@@ -1,11 +1,22 @@
 {{template "header.tmpl"}}
 
+{{template "toggle_logged.tmpl"}}
+
 <style>
 .post { margin: 8px 0; }
 .post-tagline { font-size:80%; padding-left: 10px; color: #444; }
+hr { border: 1px solid #eee; }
 </style>
 
 <body>
+  <div style="display:none" data-unauthenticated-display="inline">
+    <a href="/login/">Login</a>
+  </div>
+  <div style="display:none" data-authenticated-display="inline">
+    <a href="/p/new/">Create new post</a>
+    <a href="/logout/">Logout</a>
+  </div>
+  <hr>
   {{if .Posts}}
       {{range .Posts}}
         <div class="post">
@@ -21,5 +32,4 @@
   {{else}}
     <div>No posts</div>
   {{end}}
-  <a class="button" href="/p/new/">Create new post</a>
 </body>

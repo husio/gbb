@@ -62,11 +62,11 @@ func attachTrace(ctx context.Context, name, parent string) (context.Context, *tr
 		now: time.Now,
 		spans: []*span{
 			{
-				id:          generateID(),
-				parent:      parent,
-				description: name,
-				args:        nil,
-				begin:       time.Now(),
+				ID:          generateID(),
+				Parent:      parent,
+				Description: name,
+				Args:        nil,
+				Start:       time.Now(),
 			},
 		},
 	}
@@ -87,8 +87,8 @@ func (tr *trace) finalize() {
 	tr.mu.Lock()
 	now := tr.now()
 	for _, s := range tr.spans {
-		if s.end == nil {
-			s.end = &now
+		if s.End == nil {
+			s.End = &now
 		}
 	}
 	tr.mu.Unlock()
@@ -97,12 +97,12 @@ func (tr *trace) finalize() {
 type span struct {
 	trace *trace
 
-	id          string
-	parent      string
-	description string
-	args        []string
-	begin       time.Time
-	end         *time.Time
+	ID          string
+	Parent      string
+	Description string
+	Args        []string
+	Start       time.Time
+	End         *time.Time
 }
 
 func (s *span) Begin(description string, keyvalues ...string) TraceSpan {
@@ -111,11 +111,11 @@ func (s *span) Begin(description string, keyvalues ...string) TraceSpan {
 	}
 	ns := &span{
 		trace:       s.trace,
-		id:          generateID(),
-		parent:      s.id,
-		description: description,
-		begin:       s.trace.now(),
-		args:        keyvalues,
+		ID:          generateID(),
+		Parent:      s.ID,
+		Description: description,
+		Start:       s.trace.now(),
+		Args:        keyvalues,
 	}
 
 	s.trace.mu.Lock()
@@ -127,12 +127,12 @@ func (s *span) Begin(description string, keyvalues ...string) TraceSpan {
 
 func (s *span) Finish(keyvalues ...string) {
 	now := s.trace.now()
-	s.end = &now
+	s.End = &now
 
 	if len(keyvalues)%2 == 1 {
 		keyvalues = append(keyvalues, "")
 	}
-	s.args = append(s.args, keyvalues...)
+	s.Args = append(s.Args, keyvalues...)
 }
 
 type discardTraceSpan struct{}

@@ -1,4 +1,7 @@
 {{template "header.tmpl"}}
+
+{{template "toggle_logged.tmpl"}}
+
 <style>
 .comment { padding: 10px; margin: 20px 0; }
 .comment-content { padding-left: 20px; }
@@ -32,34 +35,15 @@
   </p>
 
   <form method="POST" action="/p/{{.Post.PostID}}/comment/" enctype="multipart/form-data" autocomplete="off">
-    <textarea name="content" class="js-enable-when-logged" required placeholder="Write your comment" disabled></textarea>
-    <button type="submit" class="js-enable-when-logged" disabled>Comment</button>
-    <span class="js-hide-when-logged">You must <a href="/login/">login</a> to comment.</span>
+    <textarea name="content" data-unauthenticated-disabled="true" required placeholder="Write your comment"></textarea>
+    <button type="submit" data-unauthenticated-disabled="true">Comment</button>
+    <span data-authenticated-display="inline" style="display:none">
+      writing as <em data-authenticated-content="Name"></em>
+    </span>
+    <span data-unauthenticated-display="inline" style="display:none">
+      You must <a href="/login/">login</a> to comment.
+    </span>
 
-    <script>
-      window.addEventListener("load", function() {
-        var req = new XMLHttpRequest()
-        req.responseType = "json"
-        req.open("GET", "/api/me/")
-        req.onload = function() {
-          if (req.status === 200) {
-            var data = req.response
-
-            var inputs = document.getElementsByClassName('js-enable-when-logged')
-            for(var i = 0; i < inputs.length; i++) {
-                  inputs[i].disabled = false
-            }
-
-            var inputs = document.getElementsByClassName('js-hide-when-logged')
-            for(var i = 0; i < inputs.length; i++) {
-                  inputs[i].style.display = 'none'
-            }
-          }
-        }
-        req.send()
-      })
-    </script>
   </form>
-
   <span id="bottom"></span>
 </body>

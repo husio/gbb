@@ -46,7 +46,7 @@ func main() {
 		},
 	})
 
-	unboundCache, err := surf.NewCookieCache("", []byte(secret))
+	authStore, err := surf.NewCookieCache("", []byte(secret))
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot create cookie cache")
 		os.Exit(1)
@@ -56,17 +56,17 @@ func main() {
 
 	rt.Get(`/`, http.RedirectHandler("/p/", http.StatusTemporaryRedirect))
 	rt.Get(`/p/`, gbb.PostListHandler(bbStore, renderer))
-	rt.Get(`/p/new/`, gbb.PostCreateHandler(bbStore, unboundCache, renderer))
-	rt.Post(`/p/new/`, gbb.PostCreateHandler(bbStore, unboundCache, renderer))
+	rt.Get(`/p/new/`, gbb.PostCreateHandler(bbStore, authStore, renderer))
+	rt.Post(`/p/new/`, gbb.PostCreateHandler(bbStore, authStore, renderer))
 	rt.Get(`/p/<post-id:[^/]+>/.*`, gbb.CommentListHandler(bbStore, renderer))
-	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(bbStore, unboundCache, renderer))
-	rt.Get(`/login/`, gbb.LoginHandler(unboundCache, userStore, renderer))
-	rt.Post(`/login/`, gbb.LoginHandler(unboundCache, userStore, renderer))
-	rt.Post(`/logout/`, gbb.LogoutHandler(unboundCache))
-	rt.Get(`/register/`, gbb.RegisterHandler(unboundCache, userStore, renderer))
-	rt.Post(`/register/`, gbb.RegisterHandler(unboundCache, userStore, renderer))
+	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(bbStore, authStore, renderer))
+	rt.Get(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
+	rt.Post(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
+	rt.Post(`/logout/`, gbb.LogoutHandler(authStore))
+	rt.Get(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
+	rt.Post(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
 
-	rt.Get(`/api/me/`, gbb.MeHandler(unboundCache))
+	rt.Get(`/api/me/`, gbb.MeHandler(authStore))
 
 	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
 		renderer.Response(http.StatusOK, "ghost_template.tmpl", nil)

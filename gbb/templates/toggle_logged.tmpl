@@ -1,0 +1,74 @@
+<script>
+(function() {
+  if (!window.xx78fe8c) {
+    window.xx78fe8c = true
+
+    var db = sessionStorage
+
+    window.addEventListener("load", function() {
+      var authenticated = db.getItem("authenticated")
+      if (authenticated !== null) {
+        updateDOM(authenticated)
+
+        // refresh only every 10s
+        if (parseInt(db.getItem("authenticated.fetchedAt"), 10) + 10000 > Date.now()) {
+          return
+        }
+      }
+
+      var req = new XMLHttpRequest()
+      req.responseType = "json"
+      req.open("GET", "/api/me/")
+      req.onload = function() {
+        db.setItem("authenticated.fetchedAt", Date.now())
+
+        // refresh only if anything changed
+        if (authenticated !== null && (authenticated === "1") === (req.status === 200)) {
+          return
+        }
+
+        db.clear()
+        db.setItem("authenticated.fetchedAt", Date.now())
+
+        authenticated = req.status === 200
+        db.setItem("authenticated", authenticated)
+
+        if (authenticated) {
+          for (var key in req.response) {
+            db.setItem("authenticated." + key, req.response[key])
+          }
+        }
+
+        updateDOM(authenticated)
+      }
+      req.send()
+    })
+
+    function foreach(selector, cb) {
+      var elements = document.querySelectorAll(selector)
+      for (var i=0; i<elements.length; i++) {
+        var el = elements[i]
+        cb(el, i)
+      }
+    }
+
+    function updateDOM(authenticated) {
+      var prefix = authenticated ? '' : 'un'
+
+      foreach('[data-' + prefix + 'authenticated-disabled]', function(el) {
+        el.disabled = el.getAttribute('data-' + prefix + 'authenticated-disabled') === 'true'
+      })
+
+      foreach('[data-' + prefix + 'authenticated-display]', function(el) {
+        el.style.display = el.getAttribute('data-' + prefix + 'authenticated-display')
+      })
+
+      if (authenticated) {
+        foreach('[data-authenticated-content]', function(el) {
+          el.innerHTML = db.getItem("authenticated." + el.getAttribute('data-authenticated-content'))
+        })
+      }
+    }
+  }
+}())
+</script>
