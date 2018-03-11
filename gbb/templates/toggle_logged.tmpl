@@ -6,7 +6,7 @@
     var db = sessionStorage
 
     window.addEventListener("load", function() {
-      var authenticated = db.getItem("authenticated")
+      var authenticated = db.getItem("authenticated") === "true"
       if (authenticated !== null) {
         updateDOM(authenticated)
 

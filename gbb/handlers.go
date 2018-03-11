@@ -1,6 +1,7 @@
 package gbb
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -125,10 +126,16 @@ func CommentListHandler(
 			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
 
+		surf.Info(ctx, "listing comments",
+			"post.id", fmt.Sprint(post.PostID),
+			"post.subject", post.Subject)
+
 		if err := store.IncrementPostView(ctx, postID); err != nil {
 			surf.Error(ctx, err, "cannot increment view counter",
 				"postID", fmt.Sprint(post.PostID))
 		}
+
+		surf.Error(ctx, errors.New("roar!"), "this is just a test")
 
 		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
 			Post:     post,

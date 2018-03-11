@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 func DebugToolbarMiddleware(rootPath string) Middleware {
@@ -30,12 +31,14 @@ type debugtoolbarMiddleware struct {
 
 func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, dt.rootPath) {
-		requestID := r.URL.Query().Get("req")
+		requestID := Path(r.URL.Path).LastChunk()
 		c, ok := dt.reqInfo(requestID)
 		if !ok {
 			fmt.Fprintln(w, "no request information")
 		} else {
-			tmpl.Execute(w, c)
+			if err := tmpl.Execute(w, c); err != nil {
+				Error(r.Context(), err, "cannot render surf's debutoolbar")
+			}
 		}
 		return
 	}
@@ -50,9 +53,9 @@ func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 	dt.handler.ServeHTTP(w, r)
 
-	if w.Header().Get("Content-Type") == "text/html" {
+	if strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
 		fmt.Fprintf(w, `
-			<a style="position:absolute;top:4px;right:4px;" target="_blank" href="%s?req=%s">DT</a>
+			<a style="position:fixed;top:4px;right:4px;" target="_blank" href="%s%s/">DT</a>
 		`, dt.rootPath, debugID)
 	}
 
@@ -61,11 +64,10 @@ func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		traceSpans = tr.spans
 	}
 	dt.addReqInfo(debugtoolbarContext{
-		RequestID:     debugID,
-		RequestURL:    r.URL,
-		RequestHeader: r.Header,
-		TraceSpans:    traceSpans,
-		LogEntries:    logrec.entries,
+		RequestID:  debugID,
+		RequestURL: r.URL,
+		traceSpans: traceSpans,
+		LogEntries: logrec.entries,
 	})
 }
 
@@ -95,89 +97,135 @@ func (dt *debugtoolbarMiddleware) reqInfo(reqID string) (*debugtoolbarContext, b
 
 // debugtoolbarContext contains information about single request.
 type debugtoolbarContext struct {
-	RequestID     string
-	RequestURL    *url.URL
-	RequestHeader http.Header
+	RequestID  string
+	RequestURL *url.URL
 
-	TraceSpans []*span
+	traceSpans []*span
 	LogEntries []*logEntry
+}
+
+func (dc *debugtoolbarContext) TraceSpans() []*tracespan {
+	if len(dc.traceSpans) == 0 {
+		return nil
+	}
+
+	// first span is the longest and covers the whole request
+	start := dc.traceSpans[0].Start
+	end := dc.traceSpans[0].End
+	period := float64(end.Sub(start))
+
+	spans := make([]*tracespan, 0, len(dc.traceSpans))
+	for _, span := range dc.traceSpans {
+		offset := (float64(span.Start.Sub(start)) / period) * 100
+		spans = append(spans, &tracespan{
+			SpanID:      span.ID,
+			Start:       span.Start,
+			End:         *span.End,
+			Description: span.Description,
+			Args:        span.Args,
+
+			Duration:   span.End.Sub(span.Start),
+			OffsetPerc: offset,
+			WidthPerc:  (float64(span.End.Sub(start))/period)*100 - offset,
+		})
+	}
+	return spans
+}
+
+type tracespan struct {
+	SpanID      string
+	Description string
+	Args        []string
+	Start       time.Time
+	End         time.Time
+	Duration    time.Duration
+
+	OffsetPerc float64
+	WidthPerc  float64
+}
+
+func (ts *tracespan) ArgPairs() map[string]string {
+	if len(ts.Args) == 0 {
+		return nil
+	}
+	pairs := make(map[string]string)
+	for i := 0; i < len(ts.Args); i += 2 {
+		pairs[ts.Args[i]] = ts.Args[i+1]
+	}
+	return pairs
 }
 
 var tmpl = template.Must(template.New("").Parse(`
 <!doctype html>
-<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
 <link rel="stylesheet" href="//cdn.rawgit.com/necolas/normalize.css/master/normalize.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.3.0/milligram.min.css" integrity="sha256-Ro/wP8uUi8LR71kwIdilf78atpu8bTEwrK5ZotZo+Zc=" crossorigin="anonymous">
+<style>
+  body  { margin: 40px auto; max-width: 1000px; line-height: 180%; padding: 0 10px; font-family: sans-serif; }
+  * { box-sizing: border-box;  }
+
+  table { width: 100%; border-spacing: 0; }
+  table td { padding: 2px 4px; }
+
+  .logentry td { padding: 8px; }
+  .logentry.error { background: #FFE8E8; }
+
+  .traces-graph { width: 100%; padding: 2px 140px 8px 0; border: 1px solid #ddd; background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAH0lEQVQYlWN4+PBh2tevXwlihocPH6YxEANGFVJFIQAPZjvIf8HYugAAAABJRU5ErkJggg==); }
+  .traces-graph .bar { border-bottom: 6px solid #B5D6EB; font-size: 10px; white-space: nowrap; padding: 10px 4px 0 4px; line-height: 12px; }
+  .traces-graph .bar:first-child { border-color: #72BBE9; }
+</style>
+
 <div>
-	<h1>MOAR SVG!</h1>
+  <h1>{{.RequestURL}}</h1>
+  <p>
+    Request ID: <code>{{.RequestID}}</code>
+  </p>
 
-	<h2>Request</h2>
-	<table>
-		<tbody>
-			<tr>
-				<th>ID</th>
-				<th>{{.RequestID}}</th>
-			</tr>
-			<tr>
-				<th>URL</th>
-				<th>{{.RequestURL}}</th>
-			</tr>
-			<tr>
-				<th>Header</th>
-				<th>
-					<table>
-						{{range $key, $value := .RequestHeader}}
-							<tr>
-								<td>{{$key}}</td>
-								<td><code>{{$value}}</code></td>
-							</td>
-						{{end}}
-					</table>
-				</th>
-			</tr>
-		</tbody>
-	</table>
+  {{if .TraceSpans}}
+    <h2>Traces</h2>
+    <div class="traces-graph">
+      {{range .TraceSpans}}
+        <div class="bar" style="margin-left: {{.OffsetPerc}}%; width: {{.WidthPerc}}%" title="
+Description: {{ .Description}}
+Duration:    {{.Duration}}
+{{ range $key, $value := .ArgPairs }}
+{{$key}}: {{$value}}
+{{end -}}
+          ">
+        {{.Description}}
+      </div>
+      {{end}}
+    </div>
+  {{end}}
 
-	{{if .TraceSpans}}
-		<h2>Traces</h2>
-		<table>
-		<tr>
-			<th>Description</th>
-			<th>Duration</th>
-			<th>Args</th>
-		</tr>
-		{{range .TraceSpans}}
-			<tr>
-				<td>{{.Description}}</td>
-				<td>{{.End.Sub .Start}}</td>
-				<td>{{if .Args}}{{.Args}}{{else}}-{{end}}</td>
-			</tr>
-		{{end}}
-		</table>
-	{{end}}
-
-	{{if .LogEntries}}
-		<h2>Log messages</h2>
-		<table>
-		<tr>
-			<th>Created</th>
-			<th>Level</th>
-			<th>Message</th>
-			<th>Args</th>
-		</tr>
-		{{range .LogEntries}}
-			<tr>
-				<td>{{.Created.Format "15:04:05.000"}}</td>
-				<td>{{.Level}}</td>
-				<td>
-					{{- if .Error}}
-						<span>{{.Error}}</span>:
-					{{end -}}
-					{{.Message}}
-				</td>
-				<td>{{if .Args}}{{.Args}}{{else}}-{{end}}</td>
-			</tr>
-		{{end}}
-	{{end}}
+  {{if .LogEntries}}
+    <h2>Log messages</h2>
+    <table>
+      <tbody>
+        {{range .LogEntries}}
+          <tr class="logentry {{.Level}}">
+            <td>
+              {{- if .Error}}
+                <strong>{{.Error}}</strong>
+              {{end -}}
+              {{.Message}}
+            </td>
+            <td>
+              {{if .Args}}
+	        <table>
+                {{ range $key, $value := .Args }}
+                    <tr>
+                      <td><code>{{$key}}</code></td>
+                      <td>{{$value}}</td>
+                    </tr>
+                {{end -}}
+                </table>
+              {{else}}
+                -
+              {{end}}
+            </td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  {{end}}
 </div>
 `))
