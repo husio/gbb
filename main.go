@@ -14,12 +14,24 @@ import (
 	"github.com/shurcooL/github_flavored_markdown"
 )
 
-const secret = "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas"
-
 func main() {
 	logger := surf.NewLogger(os.Stderr)
 
-	db, err := sql.Open("postgres", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`)
+	httpPort := os.Getenv("PORT")
+	if httpPort == "" {
+		httpPort = "8000"
+	}
+
+	secret := os.Getenv("SECRET")
+	if secret == "" {
+		secret = "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas"
+	}
+
+	pgconf := os.Getenv("DATABASE_URL")
+	if pgconf == "" {
+		pgconf = `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`
+	}
+	db, err := sql.Open("postgres", pgconf)
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot open SQL database")
 		os.Exit(1)
@@ -79,7 +91,7 @@ func main() {
 
 	logger.Info(context.Background(), "starting server",
 		"port", "8000")
-	if err := http.ListenAndServe(":8000", app); err != nil {
+	if err := http.ListenAndServe(":"+httpPort, app); err != nil {
 		logger.Error(context.Background(), err, "HTTP server failed")
 	}
 }

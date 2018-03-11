@@ -3,12 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "MW/Qvg5CDnQLEyWjaoLJrKrYJD8=",
-			"path": "dmitri.shuralyov.com/kebabcase",
-			"revision": "bf160e40a7918fbe9dc3cc841a023d87242bd2eb",
-			"revisionTime": "2017-09-14T16:21:31Z"
-		},
-		{
 			"checksumSHA1": "V1a5/Ra9HXKNuArt5WKUqu+Jxt8=",
 			"path": "github.com/lib/pq",
 			"revision": "19c8e9ad00952ce0c64489b60e8df88bb16dd514",
