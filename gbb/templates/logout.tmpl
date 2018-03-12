@@ -1,0 +1,15 @@
+{{template "header.tmpl"}}
+
+
+{{if .User}}
+  <form method="POST" action="/logout/">
+    <button>Logout</button>
+    or abort and go back to <a href="/p/">posts list</a>.
+  </form>
+
+  <script>
+    sessionStorage.clear()
+  </script>
+{{else}}
+  Not logged in.
+{{end}}

@@ -5,8 +5,16 @@
 
     var db = sessionStorage
 
+    function isAuthenticated() {
+      var a = db.getItem("authenticated")
+      if (a === null) {
+        return null
+      }
+      return a === "true"
+    }
+
     window.addEventListener("load", function() {
-      var authenticated = db.getItem("authenticated") === "true"
+      var authenticated = isAuthenticated()
       if (authenticated !== null) {
         updateDOM(authenticated)
 

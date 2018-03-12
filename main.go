@@ -74,7 +74,8 @@ func main() {
 	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(bbStore, authStore, renderer))
 	rt.Get(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
 	rt.Post(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
-	rt.Post(`/logout/`, gbb.LogoutHandler(authStore))
+	rt.Get(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))
+	rt.Post(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))
 	rt.Get(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
 	rt.Post(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
 

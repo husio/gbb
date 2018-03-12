@@ -251,9 +251,26 @@ func LoginHandler(
 
 func LogoutHandler(
 	authStore surf.UnboundCacheService,
+	users UserStore,
+	rend surf.Renderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
+
+		if r.Method == "GET" {
+			user, err := CurrentUser(ctx, authStore.Bind(w, r))
+			if err != nil && err != ErrUnauthenticated {
+				surf.Error(ctx, err, "cannot get current user from cache")
+				// continue - this is not a critical error
+			}
+
+			return rend.Response(http.StatusOK, "logout.tmpl", struct {
+				User *User
+			}{
+				User: user,
+			})
+		}
+
 		if err := Logout(ctx, authStore.Bind(w, r)); err != nil {
 			surf.Error(ctx, err, "cannot logout user")
 		}
