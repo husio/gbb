@@ -14,6 +14,8 @@
     <a href="/p/">Back to listing</a>
   </p>
 
+  <hr>
+
   <h1>{{.Post.Subject}}</h1>
   {{range .Comments}}
     <div class="comment" id="comment-{{.CommentID}}">
@@ -27,6 +29,8 @@
       </div>
     </div>
   {{end}}
+
+  <hr>
 
   <p>
     <a href="#top">Top of the page</a>

@@ -30,6 +30,22 @@ func StdResponse(r Renderer, responseCode int) Response {
 	})
 }
 
+func Redirect(url string, responseCode int) Response {
+	return &redirectResponse{
+		code: responseCode,
+		url:  url,
+	}
+}
+
+type redirectResponse struct {
+	code int
+	url  string
+}
+
+func (rr *redirectResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, rr.url, rr.code)
+}
+
 func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) Renderer {
 	renderer := &htmlRenderer{
 		funcs:         funcs,

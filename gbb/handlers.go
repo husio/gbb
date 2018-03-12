@@ -50,8 +50,7 @@ func PostCreateHandler(
 		case nil:
 			// all good
 		case ErrUnauthenticated:
-			http.Redirect(w, r, "/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
-			return nil
+			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
 			surf.Error(ctx, err, "cannot get current user")
 			return surf.StdResponse(rend, http.StatusInternalServerError)
@@ -92,8 +91,7 @@ func PostCreateHandler(
 			}
 
 			url := fmt.Sprintf("/p/%d/#bottom", post.PostID)
-			http.Redirect(w, r, url, http.StatusSeeOther)
-			return nil
+			return surf.Redirect(url, http.StatusSeeOther)
 		}
 
 		return rend.Response(http.StatusOK, "post_create.tmpl", content)
@@ -164,8 +162,7 @@ func CommentCreateHandler(
 		case nil:
 			// all good
 		case ErrUnauthenticated:
-			http.Redirect(w, r, "/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
-			return nil
+			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
 			surf.Error(ctx, err, "cannot get current user")
 			return surf.StdResponse(rend, http.StatusInternalServerError)
@@ -185,8 +182,7 @@ func CommentCreateHandler(
 			}
 		}
 		url := fmt.Sprintf("/p/%d/#bottom", postID)
-		http.Redirect(w, r, url, http.StatusSeeOther)
-		return nil
+		return surf.Redirect(url, http.StatusSeeOther)
 	}
 }
 
@@ -213,8 +209,7 @@ func LoginHandler(
 						"login", login)
 					errors = append(errors, "Temporary issues. Please try again later.")
 				} else {
-					http.Redirect(w, r, "/", http.StatusSeeOther)
-					return nil
+					return surf.Redirect("/", http.StatusSeeOther)
 				}
 			case ErrNotFound:
 				surf.Info(ctx, "failed authentication attempt",
@@ -274,8 +269,7 @@ func LogoutHandler(
 		if err := Logout(ctx, authStore.Bind(w, r)); err != nil {
 			surf.Error(ctx, err, "cannot logout user")
 		}
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return nil
+		return surf.Redirect("/", http.StatusSeeOther)
 	}
 }
 
@@ -339,8 +333,7 @@ func RegisterHandler(
 					"name", user.Name)
 				return surf.StdResponse(rend, http.StatusInternalServerError)
 			} else {
-				http.Redirect(w, r, "/", http.StatusSeeOther)
-				return nil
+				return surf.Redirect("/", http.StatusSeeOther)
 			}
 		case ErrConstraint:
 			context.Errors["Login"] = "Login already in use"
