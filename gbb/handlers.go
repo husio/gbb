@@ -24,6 +24,16 @@ func PostListHandler(
 			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
 
+		sleepSpan := surf.CurrentTrace(ctx).Begin("sleeping for fun")
+		for i := 0; i < 4; i++ {
+			span := sleepSpan.Begin("Zzzz",
+				"i", fmt.Sprint(i))
+			time.Sleep(time.Duration(i) * time.Millisecond)
+			span.Finish()
+
+		}
+		sleepSpan.Finish()
+
 		return rend.Response(http.StatusOK, "post_list.tmpl", struct {
 			Posts []*Post
 		}{
