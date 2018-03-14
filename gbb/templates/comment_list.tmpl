@@ -24,17 +24,23 @@
   {{range .Comments}}
     <div class="comment" id="comment-{{.CommentID}}">
       <div class="comment-header">
+        <a href="#comment-{{.CommentID}}" title="direct link to the comment">#</a>
         <a href="/u/{{.Author.UserID}}">{{.Author.Name}}</a>
         at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
-        | <a href="./#comment-{{.CommentID}}">link</a>
       </div>
       <div class="comment-content">
-        <p>{{.Content | markdown}}</p>
+        <p>{{.Content}}</p>
       </div>
     </div>
   {{end}}
 
   <hr>
+
+  <p>
+    {{if .NextPageAfter}}
+      <a href="./?after={{.NextPageAfter}}">Next page</a>
+    {{end}}
+  </p>
 
   <p>
     <a href="#top">Top of the page</a>

@@ -45,10 +45,9 @@ CREATE TABLE IF NOT EXISTS posts (
 	author_id INTEGER NOT NULL REFERENCES users(user_id),
 
 	views_count INTEGER NOT NULL default 0 CHECK (views_count >= 0),
-	comments_count INTEGER NOT NULL default 1 CHECK (comments_count >= 0)
+	comments_count INTEGER NOT NULL default 1 CHECK (comments_count >= 0),
+	latest_comment TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS posts_created_idx ON posts(created);
 
 CREATE TABLE IF NOT EXISTS comments (
 	comment_id SERIAL PRIMARY KEY,
@@ -59,6 +58,11 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 
 CREATE INDEX IF NOT EXISTS comments_created_idx ON comments(created);
+
+
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS latest_comment TIMESTAMPTZ NOT NULL DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS posts_created_idx ON posts(latest_comment);
 
 `
 
@@ -75,7 +79,7 @@ func EnsureSchema(db *sql.DB) error {
 	return nil
 }
 
-func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error) {
+func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time, limit int) ([]*Post, error) {
 	defer surf.CurrentTrace(ctx).Begin("list posts").Finish()
 
 	surf.Info(ctx, "listing posts",
@@ -96,9 +100,9 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Pos
 		WHERE
 			p.created <= $1
 		ORDER BY
-			p.created DESC
-		LIMIT 1000
-	`, createdLte)
+			p.latest_comment DESC
+		LIMIT $2
+	`, createdLte, limit)
 	if err != nil {
 		return posts, fmt.Errorf("cannot fetch posts: %s", err)
 	}
@@ -115,7 +119,7 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time) ([]*Pos
 	return posts, nil
 }
 
-func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error) {
+func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte time.Time, limit int) (*Post, []*Comment, error) {
 	span := surf.CurrentTrace(ctx).Begin("list comments")
 	defer span.Finish()
 
@@ -172,8 +176,8 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 		ORDER BY
 			c.created ASC
 		LIMIT
-			1000
-	`, p.PostID, createdLte)
+			$3
+	`, p.PostID, createdLte, limit)
 	fetchCommentSpan.Finish()
 	if err != nil {
 		return &p, nil, fmt.Errorf("cannot fetch comments: %s", err)
@@ -273,7 +277,20 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 		return nil, fmt.Errorf("cannot fetch user: %s", err)
 	}
 
-	switch result, err := tx.ExecContext(ctx, `UPDATE posts SET comments_count = comments_count + 1 WHERE post_id = $1`, postID); err {
+	comment := Comment{
+		PostID:  postID,
+		Content: content,
+		Created: time.Now().UTC(),
+		Author:  user,
+	}
+
+	switch result, err := tx.ExecContext(ctx, `
+		UPDATE posts
+		SET
+			comments_count = comments_count + 1,
+			latest_comment = $2
+		WHERE post_id = $1
+	`, comment.PostID, comment.Created); err {
 	case nil:
 		if n, err := result.RowsAffected(); err != nil || n != 1 {
 			return nil, ErrNotFound
@@ -282,12 +299,6 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 		return nil, fmt.Errorf("cannot update post counter: %s", err)
 	}
 
-	comment := Comment{
-		PostID:  postID,
-		Content: content,
-		Created: time.Now().UTC(),
-		Author:  user,
-	}
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO comments (post_id, content, created, author_id)
 		VALUES ($1, $2, $3, $4)

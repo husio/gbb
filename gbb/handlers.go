@@ -18,7 +18,13 @@ func PostListHandler(
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		posts, err := store.ListPosts(ctx, time.Now())
+		createdLte, ok := timeFromParam(r.URL.Query(), "after")
+		if !ok {
+			createdLte = time.Now()
+		}
+
+		const postsPerPage = 100
+		posts, err := store.ListPosts(ctx, createdLte, postsPerPage)
 		if err != nil {
 			surf.Error(ctx, err, "cannot fetch posts")
 			return surf.StdResponse(rend, http.StatusInternalServerError)
@@ -34,10 +40,17 @@ func PostListHandler(
 		}
 		sleepSpan.Finish()
 
+		nextPageAfter := ""
+		if len(posts) == postsPerPage {
+			nextPageAfter = posts[len(posts)-1].Created.Format(time.RFC3339)
+		}
+
 		return rend.Response(http.StatusOK, "post_list.tmpl", struct {
-			Posts []*Post
+			Posts         []*Post
+			NextPageAfter string
 		}{
-			Posts: posts,
+			Posts:         posts,
+			NextPageAfter: nextPageAfter,
 		})
 	}
 }
@@ -113,15 +126,22 @@ func CommentListHandler(
 	rend surf.Renderer,
 ) surf.HandlerFunc {
 	type Content struct {
-		Post     *Post
-		Comments []*Comment
+		Post          *Post
+		Comments      []*Comment
+		NextPageAfter string
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
+		createdLte, ok := timeFromParam(r.URL.Query(), "after")
+		if !ok {
+			createdLte = time.Now()
+		}
+
+		const commentsPerPage = 100
 		postID := surf.PathArgInt64(r, 0)
-		post, comments, err := store.ListComments(ctx, postID, time.Now())
+		post, comments, err := store.ListComments(ctx, postID, createdLte, commentsPerPage)
 		switch err {
 		case nil:
 			// all good
@@ -145,9 +165,15 @@ func CommentListHandler(
 
 		surf.Error(ctx, errors.New("roar!"), "this is just a test")
 
+		nextPageAfter := ""
+		if len(comments) == commentsPerPage {
+			nextPageAfter = comments[len(comments)-1].Created.Format(time.RFC3339)
+		}
+
 		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
-			Post:     post,
-			Comments: comments,
+			Post:          post,
+			Comments:      comments,
+			NextPageAfter: nextPageAfter,
 		})
 	}
 }
@@ -191,8 +217,7 @@ func CommentCreateHandler(
 				return surf.StdResponse(rend, http.StatusInternalServerError)
 			}
 		}
-		url := fmt.Sprintf("/p/%d/#bottom", postID)
-		return surf.Redirect(url, http.StatusSeeOther)
+		return surf.Redirect("/p/", http.StatusSeeOther)
 	}
 }
 
@@ -219,7 +244,11 @@ func LoginHandler(
 						"login", login)
 					errors = append(errors, "Temporary issues. Please try again later.")
 				} else {
-					return surf.Redirect("/", http.StatusSeeOther)
+					next := r.FormValue("next")
+					if next == "" {
+						next = "/"
+					}
+					return surf.Redirect(next, http.StatusSeeOther)
 				}
 			case ErrNotFound:
 				surf.Info(ctx, "failed authentication attempt",
@@ -247,9 +276,11 @@ func LoginHandler(
 		return rend.Response(code, "login.tmpl", struct {
 			Errors []string
 			User   *User
+			Next   string
 		}{
 			Errors: errors,
 			User:   user,
+			Next:   r.URL.Query().Get("next"),
 		})
 	}
 }
@@ -371,4 +402,25 @@ func MeHandler(
 		}
 		return nil
 	}
+}
+
+func timeFromParam(query url.Values, name string) (time.Time, bool) {
+	val := query.Get(name)
+	if val == "" {
+		return time.Time{}, false
+	}
+	for _, f := range timeFormats {
+		t, err := time.Parse(f, val)
+		if err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+var timeFormats = []string{
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04",
+	"2006-01-02",
 }

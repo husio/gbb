@@ -13,8 +13,8 @@ type UserStore interface {
 }
 
 type BBStore interface {
-	ListPosts(ctx context.Context, createdLte time.Time) ([]*Post, error)
-	ListComments(ctx context.Context, postID int64, createdLte time.Time) (*Post, []*Comment, error)
+	ListPosts(ctx context.Context, createdLte time.Time, limit int) ([]*Post, error)
+	ListComments(ctx context.Context, postID int64, createdLte time.Time, limit int) (*Post, []*Comment, error)
 	CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error)
 	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
 

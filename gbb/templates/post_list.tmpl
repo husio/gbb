@@ -28,6 +28,11 @@
           </div>
         </div>
       {{end}}
+
+      <hr>
+      {{if .NextPageAfter}}
+        <a href="./?after={{.NextPageAfter}}">Next</a>
+      {{end}}
   {{else}}
     <div>No posts</div>
   {{end}}
