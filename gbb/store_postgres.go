@@ -8,17 +8,17 @@ import (
 	"time"
 
 	"github.com/husio/gbb/pkg/surf"
-	"github.com/lib/pq"
+	"github.com/husio/gbb/pkg/surf/sqldb"
 )
 
 func NewPostgresBBStore(db *sql.DB) BBStore {
 	return &pgBBStore{
-		db: db,
+		db: sqldb.PostgresDatabase(db),
 	}
 }
 
 type pgBBStore struct {
-	db *sql.DB
+	db sqldb.Database
 }
 
 func NewPostgresUserStore(db *sql.DB) UserStore {
@@ -119,7 +119,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 	span := surf.CurrentTrace(ctx).Begin("list comments")
 	defer span.Finish()
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot open transaction: %s", err)
 	}
@@ -193,7 +193,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Begin("create post").Finish()
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot open transaction: %s", err)
 	}
@@ -252,7 +252,7 @@ func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, use
 func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error) {
 	defer surf.CurrentTrace(ctx).Begin("create comment").Finish()
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open transaction: %s", err)
 	}
@@ -324,20 +324,14 @@ func (s *pgBBStore) IncrementPostView(ctx context.Context, postID int64) error {
 }
 
 func castErr(err error) error {
-	if err == sql.ErrNoRows {
+	switch err {
+	case sqldb.ErrNotFound:
 		return ErrNotFound
+	case sqldb.ErrConstraint:
+		return ErrConstraint
+	default:
+		return err
 	}
-
-	if e, ok := err.(pq.Error); ok {
-		switch prefix := e.Code[:2]; prefix {
-		case "20":
-			return ErrNotFound
-		case "23":
-			return ErrConstraint
-		}
-	}
-
-	return err
 }
 
 func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) (*User, error) {

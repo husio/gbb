@@ -1,7 +1,16 @@
 <script>
 (function() {
-  if (!window.xx78fe8c) {
-    window.xx78fe8c = true
+  if (!window.userAuthenticated) {
+    window.userAuthenticated = function(cb) {
+      var a = isAuthenticated()
+      if (a !== null) {
+        cb(a)
+        return
+      }
+      setTimeout(function() {
+        userAuthenticated(cb)
+      }, 250)
+    }
 
     var db = sessionStorage
 
