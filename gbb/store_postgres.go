@@ -283,21 +283,6 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 		Author:  user,
 	}
 
-	switch result, err := tx.ExecContext(ctx, `
-		UPDATE posts
-		SET
-			comments_count = comments_count + 1,
-			latest_comment = $2
-		WHERE post_id = $1
-	`, comment.PostID, comment.Created); err {
-	case nil:
-		if n, err := result.RowsAffected(); err != nil || n != 1 {
-			return nil, ErrNotFound
-		}
-	default:
-		return nil, fmt.Errorf("cannot update post counter: %s", err)
-	}
-
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO comments (post_id, content, created, author_id)
 		VALUES ($1, $2, $3, $4)
@@ -310,6 +295,21 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 		return nil, ErrNotFound
 	default:
 		return nil, fmt.Errorf("cannot create comment: %s", err)
+	}
+
+	switch result, err := tx.ExecContext(ctx, `
+		UPDATE posts
+		SET
+			comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = $1),
+			latest_comment = $2
+		WHERE post_id = $1
+	`, comment.PostID, comment.Created); err {
+	case nil:
+		if n, err := result.RowsAffected(); err != nil || n != 1 {
+			return nil, ErrNotFound
+		}
+	default:
+		return nil, fmt.Errorf("cannot update post counter: %s", err)
 	}
 
 	if err := tx.Commit(); err != nil {
