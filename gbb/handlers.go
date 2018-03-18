@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,7 +24,6 @@ func PostListHandler(
 			createdLte = time.Now()
 		}
 
-		const postsPerPage = 100
 		posts, err := store.ListPosts(ctx, createdLte, postsPerPage)
 		if err != nil {
 			surf.Error(ctx, err, "cannot fetch posts")
@@ -54,6 +54,8 @@ func PostListHandler(
 		})
 	}
 }
+
+const postsPerPage = 100
 
 func PostCreateHandler(
 	store BBStore,
@@ -126,22 +128,23 @@ func CommentListHandler(
 	rend surf.Renderer,
 ) surf.HandlerFunc {
 	type Content struct {
-		Post          *Post
-		Comments      []*Comment
-		NextPageAfter string
+		Post       *Post
+		Comments   []*Comment
+		Pagination *paginator
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		createdLte, ok := timeFromParam(r.URL.Query(), "after")
-		if !ok {
-			createdLte = time.Now()
-		}
-
-		const commentsPerPage = 100
 		postID := surf.PathArgInt64(r, 0)
-		post, comments, err := store.ListComments(ctx, postID, createdLte, commentsPerPage)
+
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if page < 1 {
+			page = 1
+		}
+		offset := page * commentsPerPage
+
+		post, comments, err := store.ListComments(ctx, postID, offset, commentsPerPage)
 		switch err {
 		case nil:
 			// all good
@@ -165,18 +168,76 @@ func CommentListHandler(
 
 		surf.Error(ctx, errors.New("roar!"), "this is just a test")
 
-		nextPageAfter := ""
-		if len(comments) == commentsPerPage {
-			nextPageAfter = comments[len(comments)-1].Created.Format(time.RFC3339)
-		}
-
 		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
-			Post:          post,
-			Comments:      comments,
-			NextPageAfter: nextPageAfter,
+			Post:     post,
+			Comments: comments,
+			Pagination: &paginator{
+				total:    post.CommentsCount,
+				pageSize: commentsPerPage,
+				page:     page,
+			},
 		})
 	}
 }
+
+type paginator struct {
+	total    int64
+	pageSize int
+	page     int
+}
+
+func (p *paginator) CurrentPage() int {
+	return p.page
+}
+
+func (p *paginator) PageCount() int {
+	return int(p.total) / p.pageSize
+}
+
+func (p *paginator) NextPage() int {
+	return p.page + 1
+}
+
+func (p *paginator) HasNextPage() bool {
+	return int64((p.page+1)*p.pageSize) < p.total
+}
+
+func (p *paginator) PrevPage() int {
+	if p.page < 1 {
+		return 1
+	}
+	prev := p.page - 1
+	if int64(prev*p.pageSize) > p.total {
+		return int(p.total) / p.pageSize
+	}
+	return prev
+}
+
+func (p *paginator) HasPrevPage() bool {
+	return p.page > 1
+}
+
+func (p *paginator) Pages() []PaginatorPage {
+	pages := make([]PaginatorPage, p.PageCount())
+	for i := range pages {
+		pages[i] = PaginatorPage{
+			Number:  i + 1,
+			Active:  p.page == i+1,
+			IsFirst: i == 0,
+			IsLast:  i == len(pages)-1,
+		}
+	}
+	return pages
+}
+
+type PaginatorPage struct {
+	Number  int
+	Active  bool
+	IsFirst bool
+	IsLast  bool
+}
+
+const commentsPerPage = 100
 
 func CommentCreateHandler(
 	store BBStore,

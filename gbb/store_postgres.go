@@ -119,7 +119,7 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time, limit i
 	return posts, nil
 }
 
-func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte time.Time, limit int) (*Post, []*Comment, error) {
+func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limit int) (*Post, []*Comment, error) {
 	span := surf.CurrentTrace(ctx).Begin("list comments")
 	defer span.Finish()
 
@@ -172,12 +172,11 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, createdLte t
 			INNER JOIN users u ON c.author_id = u.user_id
 		WHERE
 			c.post_id = $1
-			AND c.created <= $2
 		ORDER BY
 			c.created ASC
-		LIMIT
-			$3
-	`, p.PostID, createdLte, limit)
+		LIMIT $2
+		OFFSET $3
+	`, p.PostID, limit, offset)
 	fetchCommentSpan.Finish()
 	if err != nil {
 		return &p, nil, fmt.Errorf("cannot fetch comments: %s", err)

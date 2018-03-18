@@ -1,9 +1,5 @@
 {{template "header.tmpl"}}
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/trix/0.11.2/trix.css" integrity="sha256-pDPWKduF9WxqvcBHlmIQ5ErZpzaIsWccFSjkqZr6+Wo=" crossorigin="anonymous">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/trix/0.11.2/trix.js" integrity="sha256-2NXA3cKWboltg3QAU7F6JTDkLMcZJ9ZuweCSgzjpE8Y=" crossorigin="anonymous"></script>
-
-
 {{template "toggle_logged.tmpl"}}
 
 <style>
@@ -29,16 +25,38 @@
         at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
       </div>
       <div class="comment-content">
-        <p>{{.Content}}</p>
+        <p>{{.Content | markdown}}</p>
       </div>
     </div>
+  {{else}}
+    No comments
   {{end}}
 
   <hr>
 
   <p>
-    {{if .NextPageAfter}}
-      <a href="./?after={{.NextPageAfter}}">Next page</a>
+    Pagination:
+    {{range .Pagination.Pages}}
+      {{if .Active}}
+        {{.Number}}
+      {{else}}
+        <a href="./?page={{.Number}}">{{.Number}}</a>
+      {{end}}
+      {{if not .IsLast}}, {{end}}
+    {{end}}
+  </p>
+
+  <p>
+    {{if .Pagination.HasPrevPage}}
+      <a href="./?page={{.Pagination.PrevPage}}">Previous page</a>
+    {{else}}
+      Previous page
+    {{end}}
+    | Page {{.Pagination.CurrentPage}} of {{.Pagination.PageCount}} |
+    {{if .Pagination.HasNextPage}}
+      <a href="./?page={{.Pagination.NextPage}}">Next page</a>
+    {{else}}
+        NextPage
     {{end}}
   </p>
 
@@ -49,11 +67,7 @@
   </p>
 
   <form method="POST" action="/p/{{.Post.PostID}}/comment/" enctype="multipart/form-data" autocomplete="off">
-    <div data-authenticated-display="block" style="display:none">
-      <trix-editor class="trix-content" input="comment-content"></trix-editor>
-    </div>
-    <textarea name="content" id="comment-content" data-authenticated-display="none" data-unauthenticated-disabled="true" placeholder="Write your comment." required></textarea>
-
+    <textarea name="content" id="comment-content" data-unauthenticated-disabled="true" placeholder="Write your comment. Use markdown." required></textarea>
     <button type="submit" data-unauthenticated-disabled="true">Comment</button>
     <span data-authenticated-display="inline" style="display:none">
       writing as <em data-authenticated-content="Name"></em>
@@ -61,6 +75,7 @@
     <span data-unauthenticated-display="inline" style="display:none">
       You must <a href="/login/?next=/p/{{.Post.PostID}}/">login</a> to comment.
     </span>
+
 
   </form>
   <span id="bottom"></span>

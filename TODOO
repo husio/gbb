@@ -1,0 +1,9 @@
+- pagination
+- traces for template rendering
+- traces for database interactions
+- html validator that can cleanup trix input
+- csrf
+- authentication
+ - password storage
+ - login with real password
+- file upload (trix does support it)

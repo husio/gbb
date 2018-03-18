@@ -1,19 +1,20 @@
 {{template "header.tmpl"}}
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/trix/0.11.2/trix.css" integrity="sha256-pDPWKduF9WxqvcBHlmIQ5ErZpzaIsWccFSjkqZr6+Wo=" crossorigin="anonymous">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/trix/0.11.2/trix.js" integrity="sha256-2NXA3cKWboltg3QAU7F6JTDkLMcZJ9ZuweCSgzjpE8Y=" crossorigin="anonymous"></script>
-
 <form method="POST" action="." enctype="multipart/form-data"autocomplete="off">
-  <input type="text" name="subject" value="{{.Subject}}" placeholder="Subject" required>
-  {{if .Errors.Subject -}}
-    <div>{{.Errors.Subject}}</div>
-  {{- end}}
+  <fieldset>
+    <input type="text" name="subject" value="{{.Subject}}" placeholder="Subject" required>
+    {{if .Errors.Subject -}}
+      <div>{{.Errors.Subject}}</div>
+    {{- end}}
+  </fieldset>
 
-  <textarea style="display:none" id="post-content" name="content" placeholder="Content" required>{{.Content}}</textarea>
-  <trix-editor class="trix-content" input="post-content"></trix-editor>
-  {{if .Errors.Content -}}
-    <div>{{.Errors.Content}}</div>
-  {{- end}}
+  <fieldset>
+    <textarea name="content" placeholder="Content" required>{{.Content}}</textarea>
+      Use <a href="https://gist.github.com/budparr/9257428">markdown</a> to format content.
+    {{if .Errors.Content -}}
+      <div>{{.Errors.Content}}</div>
+    {{- end}}
+  </fieldset>
 
   <button type="submit">Create</button>
   or abort and go back to <a href="/p/">posts list</a>.
