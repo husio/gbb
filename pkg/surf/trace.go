@@ -34,7 +34,7 @@ type TraceSpan interface {
 
 // TracingMiddleware provides trace in request's context with given frequency.
 func TracingMiddleware(frequency time.Duration) Middleware {
-	return func(h http.Handler) http.Handler {
+	return func(handler interface{}) Handler {
 		ticker := time.NewTicker(frequency)
 
 		withtrace := func() bool {
@@ -46,13 +46,14 @@ func TracingMiddleware(frequency time.Duration) Middleware {
 			}
 		}
 
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := AsHandler(handler)
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
 			if withtrace() {
 				ctx, t := attachTrace(r.Context(), "ServeHTTP", "")
 				r = r.WithContext(ctx)
 				defer t.finalize()
 			}
-			h.ServeHTTP(w, r)
+			return h.HandleHTTPRequest(w, r)
 		})
 	}
 }

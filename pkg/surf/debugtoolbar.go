@@ -12,9 +12,9 @@ import (
 )
 
 func DebugToolbarMiddleware(rootPath string) Middleware {
-	return func(h http.Handler) http.Handler {
+	return func(handler interface{}) Handler {
 		return &debugtoolbarMiddleware{
-			handler:  h,
+			handler:  AsHandler(handler),
 			rootPath: rootPath,
 			history:  list.New(),
 		}
@@ -22,14 +22,14 @@ func DebugToolbarMiddleware(rootPath string) Middleware {
 }
 
 type debugtoolbarMiddleware struct {
-	handler  http.Handler
+	handler  Handler
 	rootPath string
 
 	mu      sync.Mutex
 	history *list.List
 }
 
-func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (dt *debugtoolbarMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Response {
 	if strings.HasPrefix(r.URL.Path, dt.rootPath) {
 		requestID := Path(r.URL.Path).LastChunk()
 		c, ok := dt.reqInfo(requestID)
@@ -40,7 +40,7 @@ func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 				Error(r.Context(), err, "cannot render surf's debutoolbar")
 			}
 		}
-		return
+		return nil
 	}
 
 	debugID := generateID()
@@ -51,13 +51,7 @@ func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 	r = r.WithContext(ctx)
 
-	dt.handler.ServeHTTP(w, r)
-
-	if strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
-		fmt.Fprintf(w, `
-			<a style="position:fixed;top:4px;right:4px;" target="_blank" href="%s%s/">DT</a>
-		`, dt.rootPath, debugID)
-	}
+	response := dt.handler.HandleHTTPRequest(w, r)
 
 	var traceSpans []*span
 	if tr, ok := ctx.Value("surf:trace").(*trace); ok {
@@ -69,6 +63,19 @@ func (dt *debugtoolbarMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		traceSpans: traceSpans,
 		LogEntries: logrec.entries,
 	})
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if response != nil {
+			response.ServeHTTP(w, r)
+		}
+
+		if strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+			fmt.Fprintf(w, `
+				<a style="position:fixed;top:4px;right:4px;" target="_blank" href="%s%s/">DT</a>
+			`, dt.rootPath, debugID)
+		}
+	})
+
 }
 
 func (dt *debugtoolbarMiddleware) addReqInfo(c debugtoolbarContext) {

@@ -17,11 +17,12 @@ type Logger interface {
 }
 
 func LoggingMiddleware(logger Logger) Middleware {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(handler interface{}) Handler {
+		h := AsHandler(handler)
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
 			ctx := attachLogger(r.Context(), logger)
 			r = r.WithContext(ctx)
-			h.ServeHTTP(w, r)
+			return h.HandleHTTPRequest(w, r)
 		})
 	}
 }

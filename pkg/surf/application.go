@@ -18,12 +18,25 @@ func NewHTTPApplication(app http.Handler, logger Logger, debug bool) http.Handle
 		middlewares = append(middlewares, DebugToolbarMiddleware("/_/debugtoolbar/"))
 	}
 
-	return WithMiddlewares(app, middlewares)
+	return &application{
+		h: WithMiddlewares(app, middlewares),
+	}
+}
+
+type application struct {
+	h Handler
+}
+
+func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h := app.h.HandleHTTPRequest(w, r); h != nil {
+		h.ServeHTTP(w, r)
+	}
 }
 
 func PanicMiddleware(logger Logger) Middleware {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(handler interface{}) Handler {
+		h := AsHandler(handler)
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
 			defer func() {
 				panicErr := recover()
 				if panicErr == nil {
@@ -57,7 +70,7 @@ func PanicMiddleware(logger Logger) Middleware {
 
 			}()
 
-			h.ServeHTTP(w, r)
+			return h.HandleHTTPRequest(w, r)
 		})
 	}
 }

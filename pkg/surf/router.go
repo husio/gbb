@@ -31,30 +31,13 @@ func NewRouter() *router {
 //
 // Using '*' as methods will match any method.
 func (r *router) Add(path, methods string, handler interface{}) {
-	var h Handler
-	switch handler := handler.(type) {
-	case HandlerFunc:
-		h = handler
-	case Handler:
-		h = handler
-	case func(http.ResponseWriter, *http.Request) Response:
-		h = HandlerFunc(handler)
-	case http.Handler:
-		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
-			return handler
-		})
-	case http.HandlerFunc:
-		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
-			return handler
-		})
-	case func(http.ResponseWriter, *http.Request):
-		h = HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
-			return http.HandlerFunc(handler)
-		})
-	default:
-		msg := fmt.Sprintf("invalid %s handler notation for %q", methods, path)
-		panic(msg)
-	}
+	defer func() {
+		if err := recover(); err != nil {
+			msg := fmt.Sprintf("invalid %s handler notation for %q: %s", methods, path, err)
+			panic(msg)
+		}
+	}()
+	h := AsHandler(handler)
 
 	builder := regexp.MustCompile(`\<.*?\>`)
 	raw := builder.ReplaceAllStringFunc(path, func(s string) string {
@@ -84,6 +67,34 @@ func (r *router) Add(path, methods string, handler interface{}) {
 		handler: h,
 	})
 
+}
+
+// AsHandler takes various handler notations and converts them to surf's
+// Handler. If given handler does not implement any known interface, nil and
+// false is returned
+func AsHandler(h interface{}) Handler {
+	switch handler := h.(type) {
+	case HandlerFunc:
+		return handler
+	case Handler:
+		return handler
+	case func(http.ResponseWriter, *http.Request) Response:
+		return HandlerFunc(handler)
+	case http.Handler:
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
+			return handler
+		})
+	case http.HandlerFunc:
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
+			return handler
+		})
+	case func(http.ResponseWriter, *http.Request):
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
+			return http.HandlerFunc(handler)
+		})
+	}
+
+	panic("unknown handler interface")
 }
 
 func (r *router) Get(path string, handler interface{}) {
