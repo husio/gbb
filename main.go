@@ -58,20 +58,31 @@ func main() {
 		},
 	})
 
-	authStore, err := surf.NewCookieCache("", []byte(secret))
+	authStore, err := surf.NewCookieCache("auth", []byte(secret))
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot create cookie cache")
 		os.Exit(1)
+	}
+
+	csrfStore, err := surf.NewCookieCache("csrf", []byte(secret))
+	if err != nil {
+		logger.Error(context.Background(), err, "cannot create cookie cache")
+		os.Exit(1)
+	}
+	csrf := surf.CsrfMiddleware(csrfStore, renderer)
+
+	if os.Getenv("NO_CSRF") == "yes" {
+		csrf = surf.AsHandler // pass through
 	}
 
 	rt := surf.NewRouter()
 
 	rt.Get(`/`, http.RedirectHandler("/p/", http.StatusTemporaryRedirect))
 	rt.Get(`/p/`, gbb.PostListHandler(bbStore, renderer))
-	rt.Get(`/p/new/`, gbb.PostCreateHandler(bbStore, authStore, renderer))
-	rt.Post(`/p/new/`, gbb.PostCreateHandler(bbStore, authStore, renderer))
-	rt.Get(`/p/<post-id:[^/]+>/.*`, gbb.CommentListHandler(bbStore, renderer))
-	rt.Post(`/p/<post-id:[^/]+>/comment/`, gbb.CommentCreateHandler(bbStore, authStore, renderer))
+	rt.Get(`/p/new/`, csrf(gbb.PostCreateHandler(bbStore, authStore, renderer)))
+	rt.Post(`/p/new/`, csrf(gbb.PostCreateHandler(bbStore, authStore, renderer)))
+	rt.Get(`/p/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, renderer)))
+	rt.Post(`/p/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
 	rt.Get(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
 	rt.Post(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
 	rt.Get(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))

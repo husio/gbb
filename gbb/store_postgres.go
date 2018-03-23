@@ -158,8 +158,9 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 		return nil, nil, fmt.Errorf("cannot fetch post: %s", err)
 	}
 
+	defer span.Begin("fetch comments").Finish()
+
 	var comments []*Comment
-	fetchCommentSpan := span.Begin("fetch comments")
 	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			c.comment_id,
@@ -176,8 +177,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 			c.created ASC
 		LIMIT $2
 		OFFSET $3
-	`, p.PostID, limit, offset)
-	fetchCommentSpan.Finish()
+	`, postID, limit, offset)
 	if err != nil {
 		return &p, nil, fmt.Errorf("cannot fetch comments: %s", err)
 	}
@@ -190,7 +190,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 		comments = append(comments, &c)
 	}
 
-	return &p, comments, nil
+	return &p, comments, rows.Err()
 }
 
 func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
@@ -300,7 +300,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 	switch result, err := tx.ExecContext(ctx, `
 		UPDATE posts
 		SET
-			comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = $1),
+			comments_count = (SELECT COUNT(*) - 1 FROM comments WHERE post_id = $1),
 			latest_comment = $2
 		WHERE post_id = $1
 	`, comment.PostID, comment.Created); err {

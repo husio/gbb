@@ -1,8 +1,8 @@
 package gbb
 
 import (
-	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,9 +63,10 @@ func PostCreateHandler(
 	rend surf.Renderer,
 ) surf.HandlerFunc {
 	type Content struct {
-		Subject string
-		Content string
-		Errors  map[string]string
+		Subject   string
+		Content   string
+		Errors    map[string]string
+		CsrfField template.HTML
 	}
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
@@ -81,7 +82,9 @@ func PostCreateHandler(
 			return surf.StdResponse(rend, http.StatusInternalServerError)
 		}
 
-		content := Content{}
+		content := Content{
+			CsrfField: surf.CsrfField(ctx),
+		}
 
 		if r.Method == "POST" {
 			if err := r.ParseMultipartForm(1e6); err != nil {
@@ -128,6 +131,7 @@ func CommentListHandler(
 	rend surf.Renderer,
 ) surf.HandlerFunc {
 	type Content struct {
+		CsrfField  template.HTML
 		Post       *Post
 		Comments   []*Comment
 		Pagination *paginator
@@ -142,7 +146,7 @@ func CommentListHandler(
 		if page < 1 {
 			page = 1
 		}
-		offset := page * commentsPerPage
+		offset := (page - 1) * commentsPerPage
 
 		post, comments, err := store.ListComments(ctx, postID, offset, commentsPerPage)
 		switch err {
@@ -166,11 +170,10 @@ func CommentListHandler(
 				"postID", fmt.Sprint(post.PostID))
 		}
 
-		surf.Error(ctx, errors.New("roar!"), "this is just a test")
-
 		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
-			Post:     post,
-			Comments: comments,
+			CsrfField: surf.CsrfField(ctx),
+			Post:      post,
+			Comments:  comments,
 			Pagination: &paginator{
 				total:    post.CommentsCount,
 				pageSize: commentsPerPage,

@@ -69,6 +69,7 @@
   <form method="POST" action="/p/{{.Post.PostID}}/comment/" enctype="multipart/form-data" autocomplete="off">
     <textarea name="content" id="comment-content" data-unauthenticated-disabled="true" placeholder="Write your comment. Use markdown." required></textarea>
     <button type="submit" data-unauthenticated-disabled="true">Comment</button>
+    {{.CsrfField}}
     <span data-authenticated-display="inline" style="display:none">
       writing as <em data-authenticated-content="Name"></em>
     </span>
