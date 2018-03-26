@@ -1,6 +1,5 @@
 - traces for template rendering
 - traces for database interactions
-- csrf
 - authentication
  - password storage
  - login with real password

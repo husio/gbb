@@ -32,11 +32,27 @@ type debugtoolbarMiddleware struct {
 func (dt *debugtoolbarMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Response {
 	if strings.HasPrefix(r.URL.Path, dt.rootPath) {
 		requestID := Path(r.URL.Path).LastChunk()
+
+		if requestID == "debugtoolbar" {
+
+			dt.mu.Lock()
+			history := make([]*debugtoolbarContext, 0, dt.history.Len())
+			for e := dt.history.Front(); e != nil; e = e.Next() {
+				history = append(history, e.Value.(*debugtoolbarContext))
+			}
+			dt.mu.Unlock()
+
+			if err := tmpl.ExecuteTemplate(w, "listing", history); err != nil {
+				Error(r.Context(), err, "cannot render debugtoolbar listing")
+			}
+			return nil
+		}
+
 		c, ok := dt.reqInfo(requestID)
 		if !ok {
-			fmt.Fprintln(w, "no request information")
+			fmt.Fprintf(w, "no request information: %s\n", requestID)
 		} else {
-			if err := tmpl.Execute(w, c); err != nil {
+			if err := tmpl.ExecuteTemplate(w, "details", c); err != nil {
 				Error(r.Context(), err, "cannot render surf's debutoolbar")
 			}
 		}
@@ -163,8 +179,28 @@ func (ts *tracespan) ArgPairs() map[string]string {
 }
 
 var tmpl = template.Must(template.New("").Parse(`
+{{define "header" -}}
 <!doctype html>
 <link rel="stylesheet" href="//cdn.rawgit.com/necolas/normalize.css/master/normalize.css">
+{{- end}}
+
+
+
+{{define "listing" -}}
+	{{- template "header"}}
+	<style>
+		.mute,
+		.mute a { color: #333; }
+	</style>
+	{{range .}}
+		<p class="{{if not .TraceSpans}}mute{{end}}"><a href="./{{.RequestID}}/">{{.RequestURL}}</a></p>
+	{{end}}
+{{- end}}
+
+
+
+{{define "details"}}
+{{- template "header"}}
 <style>
   body  { margin: 40px auto; max-width: 1000px; line-height: 180%; padding: 0 10px; font-family: sans-serif; }
   * { box-sizing: border-box;  }
@@ -185,6 +221,7 @@ var tmpl = template.Must(template.New("").Parse(`
   <p>
     Request ID: <code>{{.RequestID}}</code>
   </p>
+  <p><a href="../">All recent traces</a></p>
 
   {{if .TraceSpans}}
     <h2>Traces</h2>
@@ -235,4 +272,5 @@ Duration:    {{.Duration}}
     </table>
   {{end}}
 </div>
+{{end}}
 `))

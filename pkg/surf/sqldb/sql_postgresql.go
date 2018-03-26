@@ -8,7 +8,9 @@ import (
 )
 
 func PostgresDatabase(db *sql.DB) Database {
-	return &postgresDatabase{db: db}
+	return &tracedDatabase{
+		db: &postgresDatabase{db: db},
+	}
 }
 
 type postgresDatabase struct {
