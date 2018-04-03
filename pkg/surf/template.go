@@ -2,11 +2,13 @@ package surf
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -15,12 +17,12 @@ import (
 	texttemplate "text/template"
 )
 
-type Renderer interface {
-	Response(statusCode int, templateName string, templateContext interface{}) Response
+type HTMLRenderer interface {
+	Response(ctx context.Context, statusCode int, templateName string, templateContext interface{}) Response
 }
 
-func StdResponse(r Renderer, responseCode int) Response {
-	return r.Response(responseCode, "stdresponse.tmpl", struct {
+func StdResponse(ctx context.Context, r HTMLRenderer, responseCode int) Response {
+	return r.Response(ctx, responseCode, "stdresponse.tmpl", struct {
 		Code        int
 		Title       string
 		Description string
@@ -46,7 +48,7 @@ func (rr *redirectResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, rr.url, rr.code)
 }
 
-func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) Renderer {
+func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) HTMLRenderer {
 	renderer := &htmlRenderer{
 		funcs:         funcs,
 		templatesGlob: templatesGlob,
@@ -59,14 +61,24 @@ type htmlRenderer struct {
 	templatesGlob string
 }
 
-func (rend *htmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) Response {
+func (rend *htmlRenderer) Response(ctx context.Context, statusCode int, templateName string, templateContext interface{}) Response {
+	rootSpan := CurrentTrace(ctx).Begin("html renderer",
+		"template", templateName)
+	defer rootSpan.Finish()
+
 	// TODO: cache instead of reading file every time (unless in development mode)
+	compileSpan := rootSpan.Begin("compiling templates")
 	tmpl, err := defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
+	compileSpan.Finish()
 	if err != nil {
 		return rend.renderTemplateParseError(templateName, err)
 	}
+
 	var b bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&b, templateName, templateContext); err != nil {
+	execSpan := rootSpan.Begin("executing template")
+	err = tmpl.ExecuteTemplate(&b, templateName, templateContext)
+	execSpan.Finish()
+	if err != nil {
 		return rend.renderTemplateExecError(templateName, err)
 	}
 
@@ -84,6 +96,9 @@ type htmlResponse struct {
 }
 
 func (resp *htmlResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	span := CurrentTrace(r.Context())
+	fmt.Fprintf(os.Stderr, "CURRENT SPAN: %T\n", span)
+
 	header := w.Header()
 	header.Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(resp.code)
@@ -406,13 +421,13 @@ type defaultHtmlRenderer struct {
 	tmpl *template.Template
 }
 
-func newDefaultRenderer() Renderer {
+func newDefaultRenderer() HTMLRenderer {
 	return &defaultHtmlRenderer{
 		tmpl: defaultTemplate(),
 	}
 }
 
-func (rend *defaultHtmlRenderer) Response(statusCode int, templateName string, templateContext interface{}) Response {
+func (rend *defaultHtmlRenderer) Response(ctx context.Context, statusCode int, templateName string, templateContext interface{}) Response {
 	var b bytes.Buffer
 	if err := rend.tmpl.ExecuteTemplate(&b, templateName, templateContext); err != nil {
 		panic(err)

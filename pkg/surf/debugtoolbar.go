@@ -181,7 +181,7 @@ func (ts *tracespan) ArgPairs() map[string]string {
 var tmpl = template.Must(template.New("").Parse(`
 {{define "header" -}}
 <!doctype html>
-<link rel="stylesheet" href="//cdn.rawgit.com/necolas/normalize.css/master/normalize.css">
+<!-- <link rel="stylesheet" href="//cdn.rawgit.com/necolas/normalize.css/master/normalize.css"> -->
 {{- end}}
 
 

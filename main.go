@@ -93,10 +93,10 @@ func main() {
 	rt.Get(`/api/me/`, gbb.MeHandler(authStore))
 
 	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
-		renderer.Response(http.StatusOK, "ghost_template.tmpl", nil)
+		renderer.Response(r.Context(), http.StatusOK, "ghost_template.tmpl", nil)
 	})
 	rt.Get(`/_/template/invalidcontext/`, func(w http.ResponseWriter, r *http.Request) {
-		renderer.Response(http.StatusOK, "post_list.tmpl", nil)
+		renderer.Response(r.Context(), http.StatusOK, "post_list.tmpl", nil)
 	})
 
 	app := surf.NewHTTPApplication(rt, logger, true)

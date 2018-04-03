@@ -48,14 +48,29 @@ func TracingMiddleware(frequency time.Duration) Middleware {
 
 		h := AsHandler(handler)
 		return HandlerFunc(func(w http.ResponseWriter, r *http.Request) Response {
-			if withtrace() {
-				ctx, t := attachTrace(r.Context(), "ServeHTTP", "")
-				r = r.WithContext(ctx)
-				defer t.finalize()
+			if !withtrace() {
+				return h.HandleHTTPRequest(w, r)
 			}
-			return h.HandleHTTPRequest(w, r)
+			ctx, t := attachTrace(r.Context(), "ServeHTTP", "")
+			r = r.WithContext(ctx)
+			return &tracedResponse{
+				trace: t,
+				resp:  h.HandleHTTPRequest(w, r),
+			}
 		})
 	}
+}
+
+type tracedResponse struct {
+	trace *trace
+	resp  Response
+}
+
+func (tr *tracedResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if tr.resp != nil {
+		tr.resp.ServeHTTP(w, r)
+	}
+	tr.trace.finalize()
 }
 
 func attachTrace(ctx context.Context, name, parent string) (context.Context, *trace) {

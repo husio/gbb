@@ -16,8 +16,8 @@ func TestListPostsEmpty(t *testing.T) {
 	db := createDatabase(t)
 	defer db.Close()
 
-	store := NewPostgresStore(db)
-	if _, err := store.ListPosts(ctx, time.Now()); err != nil {
+	store := NewPostgresBBStore(db)
+	if _, err := store.ListPosts(ctx, time.Now(), 100); err != nil {
 		t.Fatalf("cannot list posts: %s", err)
 	}
 }
@@ -31,7 +31,7 @@ func TestCreatePost(t *testing.T) {
 
 	ensureUser(t, db, 999, "Bobby")
 
-	store := NewPostgresStore(db)
+	store := NewPostgresBBStore(db)
 	post, comment, err := store.CreatePost(ctx, "first", "IMO", 999)
 	if err != nil {
 		t.Fatalf("cannot create post: %s", err)
@@ -40,14 +40,14 @@ func TestCreatePost(t *testing.T) {
 	if comment.PostID != post.PostID {
 		t.Errorf("comment.PostID != post.PostID: %q != %q", comment.PostID, post.PostID)
 	}
-	if post.Title != "first" {
-		t.Errorf("invalid title: %q", post.Title)
+	if post.Subject != "first" {
+		t.Errorf("invalid subject: %q", post.Subject)
 	}
 	if post.Author.UserID != 999 || post.Author.Name != "Bobby" {
 		t.Errorf("invalid post author: %+v", post.Author)
 	}
 	if comment.Content != "IMO" {
-		t.Errorf("invalid title: %q", post.Title)
+		t.Errorf("invalid subject: %q", post.Subject)
 	}
 	if comment.Author.UserID != 999 || comment.Author.Name != "Bobby" {
 		t.Errorf("invalid comment author: %+v", comment.Author)
@@ -63,7 +63,7 @@ func TestCreateComment(t *testing.T) {
 
 	ensureUser(t, db, 999, "Bobby")
 
-	store := NewPostgresStore(db)
+	store := NewPostgresBBStore(db)
 	post, _, err := store.CreatePost(ctx, "first", "IMO", 999)
 	if err != nil {
 		t.Fatalf("cannot create post: %s", err)
@@ -78,7 +78,7 @@ func TestCreateComment(t *testing.T) {
 		t.Errorf("comment.PostID != post.PostID: %q != %q", comment.PostID, post.PostID)
 	}
 	if comment.Content != "IMO 2" {
-		t.Errorf("invalid title: %q", post.Title)
+		t.Errorf("invalid title: %q", post.Subject)
 	}
 	if comment.Author.UserID != 999 || comment.Author.Name != "Bobby" {
 		t.Errorf("invalid comment author: %+v", comment.Author)
@@ -94,7 +94,7 @@ func TestCreateCommentPostNotFound(t *testing.T) {
 
 	ensureUser(t, db, 999, "Bobby")
 
-	store := NewPostgresStore(db)
+	store := NewPostgresBBStore(db)
 	if c, err := store.CreateComment(ctx, 1244141412, "IMO", 999); err != ErrNotFound {
 		t.Fatalf("want ErrNotFound, got %q and %+v", err, c)
 	}

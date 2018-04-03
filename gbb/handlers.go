@@ -14,7 +14,7 @@ import (
 
 func PostListHandler(
 	store BBStore,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
@@ -27,7 +27,7 @@ func PostListHandler(
 		posts, err := store.ListPosts(ctx, createdLte, postsPerPage)
 		if err != nil {
 			surf.Error(ctx, err, "cannot fetch posts")
-			return surf.StdResponse(rend, http.StatusInternalServerError)
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
 		sleepSpan := surf.CurrentTrace(ctx).Begin("sleeping for fun")
@@ -45,7 +45,7 @@ func PostListHandler(
 			nextPageAfter = posts[len(posts)-1].Created.Format(time.RFC3339)
 		}
 
-		return rend.Response(http.StatusOK, "post_list.tmpl", struct {
+		return rend.Response(ctx, http.StatusOK, "post_list.tmpl", struct {
 			Posts         []*Post
 			NextPageAfter string
 		}{
@@ -60,7 +60,7 @@ const postsPerPage = 100
 func PostCreateHandler(
 	store BBStore,
 	ucache surf.UnboundCacheService,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Content struct {
 		Subject   string
@@ -79,7 +79,7 @@ func PostCreateHandler(
 			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
 			surf.Error(ctx, err, "cannot get current user")
-			return surf.StdResponse(rend, http.StatusInternalServerError)
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
 		content := Content{
@@ -89,7 +89,7 @@ func PostCreateHandler(
 		if r.Method == "POST" {
 			if err := r.ParseMultipartForm(1e6); err != nil {
 				fmt.Println("Invalid content type", err)
-				return surf.StdResponse(rend, http.StatusBadRequest)
+				return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 			}
 
 			content.Errors = make(map[string]string)
@@ -109,26 +109,26 @@ func PostCreateHandler(
 			}
 
 			if len(content.Errors) != 0 {
-				return rend.Response(http.StatusBadRequest, "post_create.tmpl", content)
+				return rend.Response(ctx, http.StatusBadRequest, "post_create.tmpl", content)
 			}
 
 			post, _, err := store.CreatePost(ctx, content.Subject, content.Content, user.UserID)
 			if err != nil {
 				surf.Error(ctx, err, "cannot create posts")
-				return surf.StdResponse(rend, http.StatusInternalServerError)
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 
 			url := fmt.Sprintf("/p/%d/#bottom", post.PostID)
 			return surf.Redirect(url, http.StatusSeeOther)
 		}
 
-		return rend.Response(http.StatusOK, "post_create.tmpl", content)
+		return rend.Response(ctx, http.StatusOK, "post_create.tmpl", content)
 	}
 }
 
 func CommentListHandler(
 	store BBStore,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Content struct {
 		CsrfField  template.HTML
@@ -154,11 +154,11 @@ func CommentListHandler(
 			// all good
 		case ErrNotFound:
 			w.WriteHeader(http.StatusBadRequest)
-			return surf.StdResponse(rend, http.StatusNotFound)
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.Error(ctx, err, "cannot fetch post and comments",
 				"postID", fmt.Sprint(postID))
-			return surf.StdResponse(rend, http.StatusInternalServerError)
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
 		surf.Info(ctx, "listing comments",
@@ -170,7 +170,7 @@ func CommentListHandler(
 				"postID", fmt.Sprint(post.PostID))
 		}
 
-		return rend.Response(http.StatusOK, "comment_list.tmpl", Content{
+		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
 			CsrfField: surf.CsrfField(ctx),
 			Post:      post,
 			Comments:  comments,
@@ -245,13 +245,13 @@ const commentsPerPage = 100
 func CommentCreateHandler(
 	store BBStore,
 	ucache surf.UnboundCacheService,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
 		if err := r.ParseMultipartForm(1e6); err != nil {
-			return surf.StdResponse(rend, http.StatusBadRequest)
+			return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 		}
 
 		postID := surf.PathArgInt64(r, 0)
@@ -265,7 +265,7 @@ func CommentCreateHandler(
 			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
 			surf.Error(ctx, err, "cannot get current user")
-			return surf.StdResponse(rend, http.StatusInternalServerError)
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
 		if len(content) > 0 {
@@ -273,12 +273,12 @@ func CommentCreateHandler(
 			case nil:
 				// all good
 			case ErrNotFound:
-				return surf.StdResponse(rend, http.StatusBadRequest)
+				return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 			default:
 				surf.Error(ctx, err, "cannot create comment",
 					"content", content,
 					"postID", fmt.Sprint(postID))
-				return surf.StdResponse(rend, http.StatusInternalServerError)
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 		}
 		return surf.Redirect("/p/", http.StatusSeeOther)
@@ -288,7 +288,7 @@ func CommentCreateHandler(
 func LoginHandler(
 	authStore surf.UnboundCacheService,
 	users UserStore,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
@@ -337,7 +337,7 @@ func LoginHandler(
 			code = http.StatusBadRequest
 		}
 
-		return rend.Response(code, "login.tmpl", struct {
+		return rend.Response(ctx, code, "login.tmpl", struct {
 			Errors []string
 			User   *User
 			Next   string
@@ -352,7 +352,7 @@ func LoginHandler(
 func LogoutHandler(
 	authStore surf.UnboundCacheService,
 	users UserStore,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
@@ -364,7 +364,7 @@ func LogoutHandler(
 				// continue - this is not a critical error
 			}
 
-			return rend.Response(http.StatusOK, "logout.tmpl", struct {
+			return rend.Response(ctx, http.StatusOK, "logout.tmpl", struct {
 				User *User
 			}{
 				User: user,
@@ -381,7 +381,7 @@ func LogoutHandler(
 func RegisterHandler(
 	authStore surf.UnboundCacheService,
 	users UserStore,
-	rend surf.Renderer,
+	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Context struct {
 		Login  string
@@ -394,11 +394,11 @@ func RegisterHandler(
 		boundCache := authStore.Bind(w, r)
 
 		if _, err := CurrentUser(ctx, boundCache); err == nil {
-			return rend.Response(http.StatusBadRequest, "error_4xx.tmpl", "Already logged in")
+			return rend.Response(ctx, http.StatusBadRequest, "error_4xx.tmpl", "Already logged in")
 		}
 
 		if r.Method == "GET" {
-			return rend.Response(http.StatusOK, "register.tmpl", Context{})
+			return rend.Response(ctx, http.StatusOK, "register.tmpl", Context{})
 		}
 
 		context := Context{
@@ -424,7 +424,7 @@ func RegisterHandler(
 		}
 
 		if len(context.Errors) != 0 {
-			return rend.Response(http.StatusBadRequest, "register.tmpl", context)
+			return rend.Response(ctx, http.StatusBadRequest, "register.tmpl", context)
 		}
 
 		switch user, err := users.Register(ctx, password, User{Name: context.Login}); err {
@@ -436,16 +436,16 @@ func RegisterHandler(
 				surf.Error(ctx, err, "cannot login user",
 					"id", fmt.Sprint(user.UserID),
 					"name", user.Name)
-				return surf.StdResponse(rend, http.StatusInternalServerError)
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			} else {
 				return surf.Redirect("/", http.StatusSeeOther)
 			}
 		case ErrConstraint:
 			context.Errors["Login"] = "Login already in use"
-			return rend.Response(http.StatusBadRequest, "register.tmpl", context)
+			return rend.Response(ctx, http.StatusBadRequest, "register.tmpl", context)
 		default:
 			surf.Error(ctx, err, "cannot register user")
-			return surf.StdResponse(rend, http.StatusInternalServerError)
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 	}
 }

@@ -15,8 +15,7 @@ import (
 
 func CsrfMiddleware(
 	cache UnboundCacheService,
-	tmpl Renderer,
-) Middleware {
+	tmpl HTMLRenderer) Middleware {
 	return func(handler interface{}) Handler {
 		return &csrfMiddleware{
 			handler: AsHandler(handler),
@@ -29,7 +28,7 @@ func CsrfMiddleware(
 type csrfMiddleware struct {
 	handler Handler
 	cache   UnboundCacheService
-	tmpl    Renderer
+	tmpl    HTMLRenderer
 }
 
 func (m *csrfMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Response {

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func NewHTTPApplication(app http.Handler, logger Logger, debug bool) http.Handler {
+func NewHTTPApplication(app interface{}, logger Logger, debug bool) http.Handler {
 	middlewares := []Middleware{
 		PanicMiddleware(logger),
 		LoggingMiddleware(logger),
@@ -19,7 +19,7 @@ func NewHTTPApplication(app http.Handler, logger Logger, debug bool) http.Handle
 	}
 
 	return &application{
-		h: WithMiddlewares(app, middlewares),
+		h: WithMiddlewares(AsHandler(app), middlewares),
 	}
 }
 
@@ -29,6 +29,8 @@ type application struct {
 
 func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h := app.h.HandleHTTPRequest(w, r); h != nil {
+		// this is called outside of any middleware!
+		defer CurrentTrace(r.Context()).Begin("writing response").Finish()
 		h.ServeHTTP(w, r)
 	}
 }

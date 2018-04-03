@@ -12,7 +12,7 @@ import (
 type router struct {
 	endpoints []endpoint
 
-	rend Renderer
+	rend HTMLRenderer
 }
 
 func NewRouter() *router {
@@ -135,7 +135,6 @@ type endpoint struct {
 
 func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h := rt.HandleHTTPRequest(w, r); h != nil {
-		defer CurrentTrace(r.Context()).Begin("writing response").Finish()
 		h.ServeHTTP(w, r)
 	}
 }
@@ -164,10 +163,12 @@ func (rt *router) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Resp
 		return endpoint.handler.HandleHTTPRequest(w, r)
 	}
 
+	ctx := r.Context()
+
 	if pathMatch {
-		return StdResponse(rt.rend, http.StatusMethodNotAllowed)
+		return StdResponse(ctx, rt.rend, http.StatusMethodNotAllowed)
 	}
-	return StdResponse(rt.rend, http.StatusNotFound)
+	return StdResponse(ctx, rt.rend, http.StatusNotFound)
 }
 
 var pathArgsKey = struct{}{}
