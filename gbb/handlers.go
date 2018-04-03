@@ -30,16 +30,6 @@ func PostListHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		sleepSpan := surf.CurrentTrace(ctx).Begin("sleeping for fun")
-		for i := 0; i < 4; i++ {
-			span := sleepSpan.Begin("Zzzz",
-				"i", fmt.Sprint(i))
-			time.Sleep(time.Duration(i) * time.Millisecond)
-			span.Finish()
-
-		}
-		sleepSpan.Finish()
-
 		nextPageAfter := ""
 		if len(posts) == postsPerPage {
 			nextPageAfter = posts[len(posts)-1].Created.Format(time.RFC3339)

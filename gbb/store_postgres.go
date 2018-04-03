@@ -23,12 +23,12 @@ type pgBBStore struct {
 
 func NewPostgresUserStore(db *sql.DB) UserStore {
 	return &pgUserStore{
-		db: db,
+		db: sqldb.PostgresDatabase(db),
 	}
 }
 
 type pgUserStore struct {
-	db *sql.DB
+	db sqldb.Database
 }
 
 const schema = `
@@ -348,7 +348,7 @@ func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) 
 	var u User
 	// YOLO!
 	// add password authentication
-	err := s.db.QueryRow(`
+	err := s.db.QueryRowContext(ctx, `
 		SELECT user_id, name
 		FROM users
 		WHERE name = $1
@@ -359,7 +359,7 @@ func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) 
 }
 
 func (s *pgUserStore) Register(ctx context.Context, password string, u User) (*User, error) {
-	err := s.db.QueryRow(`
+	err := s.db.QueryRowContext(ctx, `
 		INSERT INTO users (password, name)
 		VALUES ($1, $2)
 		RETURNING user_id
