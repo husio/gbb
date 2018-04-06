@@ -9,6 +9,7 @@ import (
 
 	"github.com/husio/gbb/pkg/surf"
 	"github.com/husio/gbb/pkg/surf/sqldb"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func NewPostgresBBStore(db *sql.DB) BBStore {
@@ -82,7 +83,7 @@ func EnsureSchema(db *sql.DB) error {
 func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time, limit int) ([]*Post, error) {
 	defer surf.CurrentTrace(ctx).Begin("list posts").Finish()
 
-	surf.Info(ctx, "listing posts",
+	surf.LogInfo(ctx, "listing posts",
 		"createdLte", createdLte.String())
 	var posts []*Post
 	resp, err := s.db.QueryContext(ctx, `
@@ -345,27 +346,68 @@ func castErr(err error) error {
 }
 
 func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) (*User, error) {
+	var passhash string
+	switch err := s.db.QueryRowContext(ctx, `
+		SELECT password
+		FROM users
+		WHERE name = $1
+		LIMIT 1
+	`, login).Scan(&passhash); err {
+	case nil:
+		// all good
+	case sqldb.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, fmt.Errorf("database: %s", err)
+	}
+
+	switch err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(password)); err {
+	case nil:
+		// all good
+	case bcrypt.ErrMismatchedHashAndPassword:
+		return nil, ErrNotFound
+	default:
+		return nil, fmt.Errorf("bcrypt: %s", err)
+	}
+
 	var u User
-	// YOLO!
-	// add password authentication
 	err := s.db.QueryRowContext(ctx, `
 		SELECT user_id, name
 		FROM users
 		WHERE name = $1
 		LIMIT 1
 	`, login).Scan(&u.UserID, &u.Name)
-
 	return &u, castErr(err)
 }
 
 func (s *pgUserStore) Register(ctx context.Context, password string, u User) (*User, error) {
-	err := s.db.QueryRowContext(ctx, `
+	passhash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("cannot hash password: %s", err)
+	}
+	err = s.db.QueryRowContext(ctx, `
 		INSERT INTO users (password, name)
 		VALUES ($1, $2)
 		RETURNING user_id
-	`, password, u.Name).Scan(&u.UserID)
+	`, passhash, u.Name).Scan(&u.UserID)
 	if err := castErr(err); err != nil {
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (s *pgUserStore) UserInfo(ctx context.Context, userID int64) (*UserInfo, error) {
+	u := UserInfo{
+		User: User{UserID: userID},
+	}
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			u.name,
+			(SELECT COUNT(*) FROM posts p WHERE p.author_id = u.user_id) AS posts_count,
+			(SELECT COUNT(*) FROM comments c WHERE c.author_id = u.user_id) AS comments_count
+		FROM users u
+		WHERE u.user_id = $1
+		LIMIT 1
+	`, userID).Scan(&u.Name, &u.PostsCount, &u.CommentsCount)
+	return &u, castErr(err)
 }

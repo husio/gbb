@@ -12,6 +12,27 @@ import (
 	"github.com/husio/gbb/pkg/surf"
 )
 
+func UserDetailsHandler(
+	users UserStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		userID := surf.PathArgInt64(r, 0)
+
+		ctx := r.Context()
+		switch user, err := users.UserInfo(ctx, userID); err {
+		case nil:
+			return rend.Response(ctx, http.StatusOK, "user_details.tmpl", user)
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot get user",
+				"userid", fmt.Sprint(userID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+	}
+}
+
 func PostListHandler(
 	store BBStore,
 	rend surf.HTMLRenderer,
@@ -26,7 +47,7 @@ func PostListHandler(
 
 		posts, err := store.ListPosts(ctx, createdLte, postsPerPage)
 		if err != nil {
-			surf.Error(ctx, err, "cannot fetch posts")
+			surf.LogError(ctx, err, "cannot fetch posts")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
@@ -68,7 +89,7 @@ func PostCreateHandler(
 		case ErrUnauthenticated:
 			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
-			surf.Error(ctx, err, "cannot get current user")
+			surf.LogError(ctx, err, "cannot get current user")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
@@ -104,7 +125,7 @@ func PostCreateHandler(
 
 			post, _, err := store.CreatePost(ctx, content.Subject, content.Content, user.UserID)
 			if err != nil {
-				surf.Error(ctx, err, "cannot create posts")
+				surf.LogError(ctx, err, "cannot create posts")
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 
@@ -146,17 +167,17 @@ func CommentListHandler(
 			w.WriteHeader(http.StatusBadRequest)
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
-			surf.Error(ctx, err, "cannot fetch post and comments",
+			surf.LogError(ctx, err, "cannot fetch post and comments",
 				"postID", fmt.Sprint(postID))
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		surf.Info(ctx, "listing comments",
+		surf.LogInfo(ctx, "listing comments",
 			"post.id", fmt.Sprint(post.PostID),
 			"post.subject", post.Subject)
 
 		if err := store.IncrementPostView(ctx, postID); err != nil {
-			surf.Error(ctx, err, "cannot increment view counter",
+			surf.LogError(ctx, err, "cannot increment view counter",
 				"postID", fmt.Sprint(post.PostID))
 		}
 
@@ -254,7 +275,7 @@ func CommentCreateHandler(
 		case ErrUnauthenticated:
 			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
-			surf.Error(ctx, err, "cannot get current user")
+			surf.LogError(ctx, err, "cannot get current user")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
@@ -265,7 +286,7 @@ func CommentCreateHandler(
 			case ErrNotFound:
 				return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 			default:
-				surf.Error(ctx, err, "cannot create comment",
+				surf.LogError(ctx, err, "cannot create comment",
 					"content", content,
 					"postID", fmt.Sprint(postID))
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
@@ -289,12 +310,12 @@ func LoginHandler(
 
 		if r.Method == "POST" {
 			login := r.FormValue("login")
-			passwd := r.FormValue("passwd")
+			passwd := r.FormValue("password")
 
 			switch user, err := users.Authenticate(ctx, login, passwd); err {
 			case nil:
 				if err := Login(ctx, boundCache, *user); err != nil {
-					surf.Error(ctx, err, "cannot login user",
+					surf.LogError(ctx, err, "cannot login user",
 						"login", login)
 					errors = append(errors, "Temporary issues. Please try again later.")
 				} else {
@@ -305,12 +326,12 @@ func LoginHandler(
 					return surf.Redirect(next, http.StatusSeeOther)
 				}
 			case ErrNotFound:
-				surf.Info(ctx, "failed authentication attempt",
+				surf.LogInfo(ctx, "failed authentication attempt",
 					"login", login)
 				errors = append(errors, "Invalid login and/or password.")
 
 			default:
-				surf.Error(ctx, err, "cannot authenticate user",
+				surf.LogError(ctx, err, "cannot authenticate user",
 					"login", login)
 				errors = append(errors, "Temporary issues. Please try again later.")
 			}
@@ -318,7 +339,7 @@ func LoginHandler(
 
 		user, err := CurrentUser(ctx, boundCache)
 		if err != nil && err != ErrUnauthenticated {
-			surf.Error(ctx, err, "cannot get current user from cache")
+			surf.LogError(ctx, err, "cannot get current user from cache")
 			// continue - this is not a critical error
 		}
 
@@ -350,7 +371,7 @@ func LogoutHandler(
 		if r.Method == "GET" {
 			user, err := CurrentUser(ctx, authStore.Bind(w, r))
 			if err != nil && err != ErrUnauthenticated {
-				surf.Error(ctx, err, "cannot get current user from cache")
+				surf.LogError(ctx, err, "cannot get current user from cache")
 				// continue - this is not a critical error
 			}
 
@@ -362,7 +383,7 @@ func LogoutHandler(
 		}
 
 		if err := Logout(ctx, authStore.Bind(w, r)); err != nil {
-			surf.Error(ctx, err, "cannot logout user")
+			surf.LogError(ctx, err, "cannot logout user")
 		}
 		return surf.Redirect("/", http.StatusSeeOther)
 	}
@@ -419,11 +440,11 @@ func RegisterHandler(
 
 		switch user, err := users.Register(ctx, password, User{Name: context.Login}); err {
 		case nil:
-			surf.Info(ctx, "new user registered",
+			surf.LogInfo(ctx, "new user registered",
 				"name", user.Name,
 				"id", fmt.Sprint(user.UserID))
 			if err := Login(ctx, boundCache, *user); err != nil {
-				surf.Error(ctx, err, "cannot login user",
+				surf.LogError(ctx, err, "cannot login user",
 					"id", fmt.Sprint(user.UserID),
 					"name", user.Name)
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
@@ -434,7 +455,7 @@ func RegisterHandler(
 			context.Errors["Login"] = "Login already in use"
 			return rend.Response(ctx, http.StatusBadRequest, "register.tmpl", context)
 		default:
-			surf.Error(ctx, err, "cannot register user")
+			surf.LogError(ctx, err, "cannot register user")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 	}

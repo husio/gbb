@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -96,9 +95,6 @@ type htmlResponse struct {
 }
 
 func (resp *htmlResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	span := CurrentTrace(r.Context())
-	fmt.Fprintf(os.Stderr, "CURRENT SPAN: %T\n", span)
-
 	header := w.Header()
 	header.Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(resp.code)

@@ -10,6 +10,7 @@ import (
 type UserStore interface {
 	Register(ctx context.Context, password string, u User) (*User, error)
 	Authenticate(ctx context.Context, login, password string) (*User, error)
+	UserInfo(ctx context.Context, userID int64) (*UserInfo, error)
 }
 
 type BBStore interface {
@@ -24,6 +25,12 @@ type BBStore interface {
 type User struct {
 	UserID int64
 	Name   string
+}
+
+type UserInfo struct {
+	User
+	PostsCount    int64
+	CommentsCount int64
 }
 
 type Post struct {

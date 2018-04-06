@@ -43,7 +43,7 @@ func (dt *debugtoolbarMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *ht
 			dt.mu.Unlock()
 
 			if err := tmpl.ExecuteTemplate(w, "listing", history); err != nil {
-				Error(r.Context(), err, "cannot render debugtoolbar listing")
+				LogError(r.Context(), err, "cannot render debugtoolbar listing")
 			}
 			return nil
 		}
@@ -53,7 +53,7 @@ func (dt *debugtoolbarMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *ht
 			fmt.Fprintf(w, "no request information: %s\n", requestID)
 		} else {
 			if err := tmpl.ExecuteTemplate(w, "details", c); err != nil {
-				Error(r.Context(), err, "cannot render surf's debutoolbar")
+				LogError(r.Context(), err, "cannot render surf's debutoolbar")
 			}
 		}
 		return nil

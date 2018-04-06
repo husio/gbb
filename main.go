@@ -83,6 +83,8 @@ func main() {
 	rt.Post(`/p/new/`, csrf(gbb.PostCreateHandler(bbStore, authStore, renderer)))
 	rt.Get(`/p/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, renderer)))
 	rt.Post(`/p/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
+	rt.Get(`/u/<user-id:\d+>/`, gbb.UserDetailsHandler(userStore, renderer))
+
 	rt.Get(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
 	rt.Post(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
 	rt.Get(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))

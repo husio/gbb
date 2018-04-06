@@ -40,7 +40,7 @@ func (m *csrfMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Reques
 	switch err := store.Get(ctx, CsrfKey, &storeToken); err {
 	case nil, ErrMiss:
 	default:
-		Error(ctx, err, "cannot get csrf token from store")
+		LogError(ctx, err, "cannot get csrf token from store")
 		return m.reject("cannot get csrf token")
 	}
 
@@ -56,12 +56,12 @@ func (m *csrfMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Reques
 
 		reqToken := requestToken(r)
 		if reqToken == "" {
-			Error(ctx, errors.New("no csrf"), "no csrf token in request")
+			LogError(ctx, errors.New("no csrf"), "no csrf token in request")
 			return m.reject("no csrf token in request")
 		}
 
 		if reqToken != storeToken {
-			Info(ctx, "csrf token missmatch",
+			LogInfo(ctx, "csrf token missmatch",
 				"requestToken", reqToken,
 				"storeToken", storeToken)
 			return m.reject("csrf token missmatch")
@@ -71,7 +71,7 @@ func (m *csrfMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Reques
 	if storeToken == "" {
 		storeToken = m.newToken()
 		if err := store.Set(ctx, CsrfKey, storeToken, 30*time.Minute); err != nil {
-			Error(ctx, err, "cannot store csrf token")
+			LogError(ctx, err, "cannot store csrf token")
 		}
 	}
 
@@ -133,7 +133,7 @@ func CsrfToken(ctx context.Context) string {
 		return s
 	}
 
-	Error(ctx, errors.New("no csrf token"), "csrf token not in context")
+	LogError(ctx, errors.New("no csrf token"), "csrf token not in context")
 	return ""
 }
 

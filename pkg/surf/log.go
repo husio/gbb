@@ -34,17 +34,17 @@ func attachLogger(ctx context.Context, logger Logger) context.Context {
 	return context.WithValue(ctx, "surf:logger", logger)
 }
 
-// Info writes info log message to logger present in given context. Message is
+// LogInfo writes info log message to logger present in given context. Message is
 // discarded if no logger is present in context.
-func Info(ctx context.Context, message string, keyvals ...string) {
+func LogInfo(ctx context.Context, message string, keyvals ...string) {
 	if log, ok := ctx.Value("surf:logger").(Logger); ok {
 		log.Info(ctx, message, keyvals...)
 	}
 }
 
-// Error writes info log message to logger present in given context. Message is
+// LogError writes info log message to logger present in given context. Message is
 // discarded if no logger is present in context.
-func Error(ctx context.Context, err error, message string, keyvals ...string) {
+func LogError(ctx context.Context, err error, message string, keyvals ...string) {
 	if log, ok := ctx.Value("surf:logger").(Logger); ok {
 		log.Error(ctx, err, message, keyvals...)
 	}
