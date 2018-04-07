@@ -1,7 +1,5 @@
 {{template "header.tmpl"}}
 
-{{template "toggle_logged.tmpl"}}
-
 <style>
 .comment { padding: 10px; margin: 20px 0; }
 .comment-content { padding-left: 20px; }
@@ -11,12 +9,12 @@
   <span id="top"></span>
 
   <p>
-    <a href="/p/">Back to listing</a>
+    <a href="/t/">Back to listing</a>
   </p>
 
   <hr>
 
-  <h1>{{.Post.Subject}}</h1>
+  <h1>{{.Topic.Subject}}</h1>
   {{range .Comments}}
     <div class="comment" id="comment-{{.CommentID}}">
       <div class="comment-header">
@@ -63,21 +61,22 @@
   <p>
     <a href="#top">Top of the page</a>
     |
-    <a href="/p/">Back to listing</a>
+    <a href="/t/">Back to listing</a>
   </p>
 
-  <form method="POST" action="/p/{{.Post.PostID}}/comment/" enctype="multipart/form-data" autocomplete="off">
-    <textarea name="content" id="comment-content" data-unauthenticated-disabled="true" placeholder="Write your comment. Use markdown." required></textarea>
-    <button type="submit" data-unauthenticated-disabled="true">Comment</button>
-    {{.CsrfField}}
-    <span data-authenticated-display="inline" style="display:none">
-      writing as <em data-authenticated-content="Name"></em>
-    </span>
-    <span data-unauthenticated-display="inline" style="display:none">
-      You must <a href="/login/?next=/p/{{.Post.PostID}}/">login</a> to comment.
-    </span>
+  {{if not .Pagination.HasNextPage}}
+    <form method="POST" action="/t/{{.Topic.TopicID}}/comment/" enctype="multipart/form-data" autocomplete="off">
+      <textarea name="content" id="comment-content" placeholder="Write your comment. Use markdown." required {{if not .CurrentUser}}disabled{{end}}></textarea>
+      <button type="submit" {{if not .CurrentUser}}disabled{{end}}>Comment</button>
+      {{.CsrfField}}
 
+      {{if .CurrentUser}}
+        writing as <em>{{.CurrentUser.Name}}</em>
+      {{else}}
+        You must <a href="/login/?next=/t/{{.Topic.TopicID}}/">login</a> to comment.
+      {{end}}
+    </form>
+  {{end}}
 
-  </form>
   <span id="bottom"></span>
 </body>

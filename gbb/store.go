@@ -3,6 +3,7 @@ package gbb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 )
@@ -14,12 +15,12 @@ type UserStore interface {
 }
 
 type BBStore interface {
-	ListPosts(ctx context.Context, createdLte time.Time, limit int) ([]*Post, error)
-	ListComments(ctx context.Context, postID int64, offset, limit int) (*Post, []*Comment, error)
-	CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error)
+	ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error)
+	ListComments(ctx context.Context, postID int64, offset, limit int) (*Topic, []*Comment, error)
+	CreateTopic(ctx context.Context, subject, content string, userID int64) (*Topic, *Comment, error)
 	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
 
-	IncrementPostView(ctx context.Context, postID int64) error
+	IncrementTopicView(ctx context.Context, postID int64) error
 }
 
 type User struct {
@@ -29,12 +30,12 @@ type User struct {
 
 type UserInfo struct {
 	User
-	PostsCount    int64
+	TopicsCount   int64
 	CommentsCount int64
 }
 
-type Post struct {
-	PostID  int64
+type Topic struct {
+	TopicID int64
 	Subject string
 	Created time.Time
 	Author  User
@@ -43,19 +44,19 @@ type Post struct {
 	ViewsCount    int64
 }
 
-func (p *Post) SlugInfo() string {
-	info := p.Created.Format("2006-01-02") + "/" + slugRx.ReplaceAllString(p.Subject, "-")
+func (t *Topic) SlugInfo() string {
+	info := t.Created.Format("2006-01-02") + "/" + slugRx.ReplaceAllString(t.Subject, "-")
 	if len(info) > 300 {
 		info = info[:300]
 	}
-	return info
+	return fmt.Sprintf("%s-%d", info, t.CommentsCount)
 }
 
 var slugRx = regexp.MustCompile(`[^a-zA-Z0-9\-_]+`)
 
 type Comment struct {
 	CommentID int64
-	PostID    int64
+	TopicID   int64
 	Content   string
 	Created   time.Time
 	Author    User

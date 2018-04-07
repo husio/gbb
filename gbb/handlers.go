@@ -14,6 +14,7 @@ import (
 
 func UserDetailsHandler(
 	users UserStore,
+	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -33,19 +34,28 @@ func UserDetailsHandler(
 	}
 }
 
-func PostListHandler(
+func TopicListHandler(
 	store BBStore,
+	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
+
+	const postsPerPage = 100
+
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
+
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil && err != ErrUnauthenticated {
+			surf.LogError(ctx, err, "cannot authenticated user")
+		}
 
 		createdLte, ok := timeFromParam(r.URL.Query(), "after")
 		if !ok {
 			createdLte = time.Now()
 		}
 
-		posts, err := store.ListPosts(ctx, createdLte, postsPerPage)
+		posts, err := store.ListTopics(ctx, createdLte, postsPerPage)
 		if err != nil {
 			surf.LogError(ctx, err, "cannot fetch posts")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
@@ -56,21 +66,21 @@ func PostListHandler(
 			nextPageAfter = posts[len(posts)-1].Created.Format(time.RFC3339)
 		}
 
-		return rend.Response(ctx, http.StatusOK, "post_list.tmpl", struct {
-			Posts         []*Post
+		return rend.Response(ctx, http.StatusOK, "topic_list.tmpl", struct {
+			CurrentUser   *User
+			Topics        []*Topic
 			NextPageAfter string
 		}{
-			Posts:         posts,
+			CurrentUser:   user,
+			Topics:        posts,
 			NextPageAfter: nextPageAfter,
 		})
 	}
 }
 
-const postsPerPage = 100
-
-func PostCreateHandler(
+func TopicCreateHandler(
 	store BBStore,
-	ucache surf.UnboundCacheService,
+	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Content struct {
@@ -82,7 +92,7 @@ func PostCreateHandler(
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		user, err := CurrentUser(ctx, ucache.Bind(w, r))
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
 		switch err {
 		case nil:
 			// all good
@@ -120,32 +130,37 @@ func PostCreateHandler(
 			}
 
 			if len(content.Errors) != 0 {
-				return rend.Response(ctx, http.StatusBadRequest, "post_create.tmpl", content)
+				return rend.Response(ctx, http.StatusBadRequest, "topic_create.tmpl", content)
 			}
 
-			post, _, err := store.CreatePost(ctx, content.Subject, content.Content, user.UserID)
+			topic, _, err := store.CreateTopic(ctx, content.Subject, content.Content, user.UserID)
 			if err != nil {
 				surf.LogError(ctx, err, "cannot create posts")
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 
-			url := fmt.Sprintf("/p/%d/#bottom", post.PostID)
+			url := fmt.Sprintf("/t/%d/#bottom", topic.TopicID)
 			return surf.Redirect(url, http.StatusSeeOther)
 		}
 
-		return rend.Response(ctx, http.StatusOK, "post_create.tmpl", content)
+		return rend.Response(ctx, http.StatusOK, "topic_create.tmpl", content)
 	}
 }
 
 func CommentListHandler(
 	store BBStore,
+	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
+
+	const commentsPerPage = 100
+
 	type Content struct {
-		CsrfField  template.HTML
-		Post       *Post
-		Comments   []*Comment
-		Pagination *paginator
+		CurrentUser *User
+		CsrfField   template.HTML
+		Topic       *Topic
+		Comments    []*Comment
+		Pagination  *paginator
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -153,13 +168,18 @@ func CommentListHandler(
 
 		postID := surf.PathArgInt64(r, 0)
 
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil && err != ErrUnauthenticated {
+			surf.LogError(ctx, err, "cannot authenticated user")
+		}
+
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		if page < 1 {
 			page = 1
 		}
 		offset := (page - 1) * commentsPerPage
 
-		post, comments, err := store.ListComments(ctx, postID, offset, commentsPerPage)
+		topic, comments, err := store.ListComments(ctx, postID, offset, commentsPerPage)
 		switch err {
 		case nil:
 			// all good
@@ -167,26 +187,27 @@ func CommentListHandler(
 			w.WriteHeader(http.StatusBadRequest)
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
-			surf.LogError(ctx, err, "cannot fetch post and comments",
+			surf.LogError(ctx, err, "cannot fetch topic and comments",
 				"postID", fmt.Sprint(postID))
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
 		surf.LogInfo(ctx, "listing comments",
-			"post.id", fmt.Sprint(post.PostID),
-			"post.subject", post.Subject)
+			"topic.id", fmt.Sprint(topic.TopicID),
+			"topic.subject", topic.Subject)
 
-		if err := store.IncrementPostView(ctx, postID); err != nil {
+		if err := store.IncrementTopicView(ctx, postID); err != nil {
 			surf.LogError(ctx, err, "cannot increment view counter",
-				"postID", fmt.Sprint(post.PostID))
+				"postID", fmt.Sprint(topic.TopicID))
 		}
 
 		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
-			CsrfField: surf.CsrfField(ctx),
-			Post:      post,
-			Comments:  comments,
+			CurrentUser: user,
+			CsrfField:   surf.CsrfField(ctx),
+			Topic:       topic,
+			Comments:    comments,
 			Pagination: &paginator{
-				total:    post.CommentsCount,
+				total:    topic.CommentsCount,
 				pageSize: commentsPerPage,
 				page:     page,
 			},
@@ -251,11 +272,9 @@ type PaginatorPage struct {
 	IsLast  bool
 }
 
-const commentsPerPage = 100
-
 func CommentCreateHandler(
 	store BBStore,
-	ucache surf.UnboundCacheService,
+	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -268,7 +287,7 @@ func CommentCreateHandler(
 		postID := surf.PathArgInt64(r, 0)
 		content := strings.TrimSpace(r.Form.Get("content"))
 
-		user, err := CurrentUser(ctx, ucache.Bind(w, r))
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
 		switch err {
 		case nil:
 			// all good
@@ -292,7 +311,7 @@ func CommentCreateHandler(
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 		}
-		return surf.Redirect("/p/", http.StatusSeeOther)
+		return surf.Redirect("/t/", http.StatusSeeOther)
 	}
 }
 
@@ -458,24 +477,6 @@ func RegisterHandler(
 			surf.LogError(ctx, err, "cannot register user")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
-	}
-}
-
-func MeHandler(
-	authStore surf.UnboundCacheService,
-) surf.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) surf.Response {
-		ctx := r.Context()
-
-		switch user, err := CurrentUser(ctx, authStore.Bind(w, r)); err {
-		case nil:
-			surf.JSONResp(w, http.StatusOK, user)
-		case ErrUnauthenticated:
-			surf.StdJSONResp(w, http.StatusUnauthorized)
-		default:
-			surf.StdJSONResp(w, http.StatusInternalServerError)
-		}
-		return nil
 	}
 }
 

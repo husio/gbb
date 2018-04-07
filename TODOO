@@ -1,6 +1,4 @@
-- traces for template rendering
-- traces for database interactions
-- authentication
- - password storage
- - login with real password
 - file upload (?)
+- trace middleware generator for interfaces
+- add "seen" tracking
+- after commenting, go to this comment instead of listing

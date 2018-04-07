@@ -80,12 +80,12 @@ func EnsureSchema(db *sql.DB) error {
 	return nil
 }
 
-func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time, limit int) ([]*Post, error) {
+func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {
 	defer surf.CurrentTrace(ctx).Begin("list posts").Finish()
 
 	surf.LogInfo(ctx, "listing posts",
 		"createdLte", createdLte.String())
-	var posts []*Post
+	var posts []*Topic
 	resp, err := s.db.QueryContext(ctx, `
 		SELECT
 			p.post_id,
@@ -110,8 +110,8 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time, limit i
 	defer resp.Close()
 
 	for resp.Next() {
-		var p Post
-		if err := resp.Scan(&p.PostID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); err != nil {
+		var p Topic
+		if err := resp.Scan(&p.TopicID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); err != nil {
 			return posts, fmt.Errorf("cannot scan row: %s", err)
 		}
 
@@ -120,7 +120,7 @@ func (s *pgBBStore) ListPosts(ctx context.Context, createdLte time.Time, limit i
 	return posts, nil
 }
 
-func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limit int) (*Post, []*Comment, error) {
+func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limit int) (*Topic, []*Comment, error) {
 	span := surf.CurrentTrace(ctx).Begin("list comments")
 	defer span.Finish()
 
@@ -130,8 +130,8 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 	}
 	defer tx.Rollback()
 
-	var p Post
-	fetchPostSpan := span.Begin("query post",
+	var p Topic
+	fetchTopicsSpan := span.Begin("query topics",
 		"post", fmt.Sprint(postID))
 	row := tx.QueryRowContext(ctx, `
 		SELECT
@@ -149,8 +149,8 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 			p.post_id = $1
 		LIMIT 1
 	`, postID)
-	fetchPostSpan.Finish()
-	switch err := row.Scan(&p.PostID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); castErr(err) {
+	fetchTopicsSpan.Finish()
+	switch err := row.Scan(&p.TopicID, &p.Subject, &p.Created, &p.ViewsCount, &p.CommentsCount, &p.Author.UserID, &p.Author.Name); castErr(err) {
 	case nil:
 		// all good
 	case ErrNotFound:
@@ -184,7 +184,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 	}
 	defer rows.Close()
 	for rows.Next() {
-		c := Comment{PostID: p.PostID}
+		c := Comment{TopicID: p.TopicID}
 		if err := rows.Scan(&c.CommentID, &c.Content, &c.Created, &c.Author.UserID, &c.Author.Name); err != nil {
 			return &p, comments, fmt.Errorf("cannot scan comment: %s", err)
 		}
@@ -194,7 +194,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, postID int64, offset, limi
 	return &p, comments, rows.Err()
 }
 
-func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, userID int64) (*Post, *Comment, error) {
+func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, userID int64) (*Topic, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Begin("create post").Finish()
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -218,7 +218,7 @@ func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, use
 		return nil, nil, fmt.Errorf("cannot fetch user: %s", err)
 	}
 
-	post := Post{
+	post := Topic{
 		Subject: subject,
 		Author:  user,
 		Created: time.Now().UTC(),
@@ -227,13 +227,13 @@ func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, use
 		INSERT INTO posts (subject, created, author_id, views_count, comments_count)
 		VALUES ($1, $2, $3, 0, 0)
 		RETURNING post_id
-	`, post.Subject, post.Created, user.UserID).Scan(&post.PostID)
+	`, post.Subject, post.Created, user.UserID).Scan(&post.TopicID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create post: %s", err)
 	}
 
 	comment := Comment{
-		PostID:  post.PostID,
+		TopicID: post.TopicID,
 		Content: content,
 		Created: post.Created,
 		Author:  user,
@@ -242,7 +242,7 @@ func (s *pgBBStore) CreatePost(ctx context.Context, subject, content string, use
 		INSERT INTO comments (post_id, content, created, author_id)
 		VALUES ($1, $2, $3, $4)
 		RETURNING comment_id
-	`, comment.PostID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
+	`, comment.TopicID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create comment: %s", err)
 	}
@@ -278,7 +278,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 	}
 
 	comment := Comment{
-		PostID:  postID,
+		TopicID: postID,
 		Content: content,
 		Created: time.Now().UTC(),
 		Author:  user,
@@ -288,7 +288,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 		INSERT INTO comments (post_id, content, created, author_id)
 		VALUES ($1, $2, $3, $4)
 		RETURNING comment_id
-	`, comment.PostID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
+	`, comment.TopicID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
 	switch err := castErr(err); err {
 	case nil:
 		// all good
@@ -304,7 +304,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 			comments_count = (SELECT COUNT(*) - 1 FROM comments WHERE post_id = $1),
 			latest_comment = $2
 		WHERE post_id = $1
-	`, comment.PostID, comment.Created); err {
+	`, comment.TopicID, comment.Created); err {
 	case nil:
 		if n, err := result.RowsAffected(); err != nil || n != 1 {
 			return nil, ErrNotFound
@@ -319,7 +319,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, postID int64, content str
 	return &comment, nil
 }
 
-func (s *pgBBStore) IncrementPostView(ctx context.Context, postID int64) error {
+func (s *pgBBStore) IncrementTopicView(ctx context.Context, postID int64) error {
 	defer surf.CurrentTrace(ctx).Begin("increment post view").Finish()
 
 	_, err := s.db.ExecContext(ctx, `
@@ -408,6 +408,6 @@ func (s *pgUserStore) UserInfo(ctx context.Context, userID int64) (*UserInfo, er
 		FROM users u
 		WHERE u.user_id = $1
 		LIMIT 1
-	`, userID).Scan(&u.Name, &u.PostsCount, &u.CommentsCount)
+	`, userID).Scan(&u.Name, &u.TopicsCount, &u.CommentsCount)
 	return &u, castErr(err)
 }

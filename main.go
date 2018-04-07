@@ -77,13 +77,13 @@ func main() {
 
 	rt := surf.NewRouter()
 
-	rt.Get(`/`, http.RedirectHandler("/p/", http.StatusTemporaryRedirect))
-	rt.Get(`/p/`, gbb.PostListHandler(bbStore, renderer))
-	rt.Get(`/p/new/`, csrf(gbb.PostCreateHandler(bbStore, authStore, renderer)))
-	rt.Post(`/p/new/`, csrf(gbb.PostCreateHandler(bbStore, authStore, renderer)))
-	rt.Get(`/p/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, renderer)))
-	rt.Post(`/p/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
-	rt.Get(`/u/<user-id:\d+>/`, gbb.UserDetailsHandler(userStore, renderer))
+	rt.Get(`/`, http.RedirectHandler("/t/", http.StatusTemporaryRedirect))
+	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, authStore, renderer))
+	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
+	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
+	rt.Get(`/t/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, authStore, renderer)))
+	rt.Post(`/t/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
+	rt.Get(`/u/<user-id:\d+>/`, gbb.UserDetailsHandler(userStore, authStore, renderer))
 
 	rt.Get(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
 	rt.Post(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
@@ -91,15 +91,6 @@ func main() {
 	rt.Post(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))
 	rt.Get(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
 	rt.Post(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
-
-	rt.Get(`/api/me/`, gbb.MeHandler(authStore))
-
-	rt.Get(`/_/template/unknown/`, func(w http.ResponseWriter, r *http.Request) {
-		renderer.Response(r.Context(), http.StatusOK, "ghost_template.tmpl", nil)
-	})
-	rt.Get(`/_/template/invalidcontext/`, func(w http.ResponseWriter, r *http.Request) {
-		renderer.Response(r.Context(), http.StatusOK, "post_list.tmpl", nil)
-	})
 
 	app := surf.NewHTTPApplication(rt, logger, true)
 

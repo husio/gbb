@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestListPostsEmpty(t *testing.T) {
+func TestListTopicsEmpty(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -17,12 +17,12 @@ func TestListPostsEmpty(t *testing.T) {
 	defer db.Close()
 
 	store := NewPostgresBBStore(db)
-	if _, err := store.ListPosts(ctx, time.Now(), 100); err != nil {
+	if _, err := store.ListTopics(ctx, time.Now(), 100); err != nil {
 		t.Fatalf("cannot list posts: %s", err)
 	}
 }
 
-func TestCreatePost(t *testing.T) {
+func TestCreateTopic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -32,22 +32,22 @@ func TestCreatePost(t *testing.T) {
 	ensureUser(t, db, 999, "Bobby")
 
 	store := NewPostgresBBStore(db)
-	post, comment, err := store.CreatePost(ctx, "first", "IMO", 999)
+	topic, comment, err := store.CreateTopic(ctx, "first", "IMO", 999)
 	if err != nil {
-		t.Fatalf("cannot create post: %s", err)
+		t.Fatalf("cannot create topic: %s", err)
 	}
 
-	if comment.PostID != post.PostID {
-		t.Errorf("comment.PostID != post.PostID: %q != %q", comment.PostID, post.PostID)
+	if comment.TopicID != topic.TopicID {
+		t.Errorf("comment.TopicID != topic.TopicID: %q != %q", comment.TopicID, topic.TopicID)
 	}
-	if post.Subject != "first" {
-		t.Errorf("invalid subject: %q", post.Subject)
+	if topic.Subject != "first" {
+		t.Errorf("invalid subject: %q", topic.Subject)
 	}
-	if post.Author.UserID != 999 || post.Author.Name != "Bobby" {
-		t.Errorf("invalid post author: %+v", post.Author)
+	if topic.Author.UserID != 999 || topic.Author.Name != "Bobby" {
+		t.Errorf("invalid topic author: %+v", topic.Author)
 	}
 	if comment.Content != "IMO" {
-		t.Errorf("invalid subject: %q", post.Subject)
+		t.Errorf("invalid subject: %q", topic.Subject)
 	}
 	if comment.Author.UserID != 999 || comment.Author.Name != "Bobby" {
 		t.Errorf("invalid comment author: %+v", comment.Author)
@@ -64,28 +64,28 @@ func TestCreateComment(t *testing.T) {
 	ensureUser(t, db, 999, "Bobby")
 
 	store := NewPostgresBBStore(db)
-	post, _, err := store.CreatePost(ctx, "first", "IMO", 999)
+	topic, _, err := store.CreateTopic(ctx, "first", "IMO", 999)
 	if err != nil {
-		t.Fatalf("cannot create post: %s", err)
+		t.Fatalf("cannot create topic: %s", err)
 	}
 
-	comment, err := store.CreateComment(ctx, post.PostID, "IMO 2", 999)
+	comment, err := store.CreateComment(ctx, topic.TopicID, "IMO 2", 999)
 	if err != nil {
 		t.Fatalf("cannot create comment: %s", err)
 	}
 
-	if comment.PostID != post.PostID {
-		t.Errorf("comment.PostID != post.PostID: %q != %q", comment.PostID, post.PostID)
+	if comment.TopicID != topic.TopicID {
+		t.Errorf("comment.TopicID != topic.TopicID: %q != %q", comment.TopicID, topic.TopicID)
 	}
 	if comment.Content != "IMO 2" {
-		t.Errorf("invalid title: %q", post.Subject)
+		t.Errorf("invalid title: %q", topic.Subject)
 	}
 	if comment.Author.UserID != 999 || comment.Author.Name != "Bobby" {
 		t.Errorf("invalid comment author: %+v", comment.Author)
 	}
 }
 
-func TestCreateCommentPostNotFound(t *testing.T) {
+func TestCreateCommentTopicNotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 

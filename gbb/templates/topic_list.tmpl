@@ -1,26 +1,26 @@
 {{template "header.tmpl"}}
 
-{{template "toggle_logged.tmpl"}}
-
 <style>
-.post { margin: 8px 0; }
-.post-tagline { font-size:80%; padding-left: 10px; color: #444; }
+.separator:after { content: " | "; padding: 0 10px; }
+.topic { margin: 8px 0; }
+.topic-tagline { font-size:80%; padding-left: 10px; color: #444; }
 </style>
 
 <body>
-  <div style="display:none" data-unauthenticated-display="inline">
+  {{if .CurrentUser}}
+    <a href="/t/new/">Create new topic</a>
+    <span class="separator"></span>
+    <a href="/logout/" title="Logged as {{.CurrentUser.Name}}">Logout</a>
+  {{else}}
     <a href="/login/">Login</a>
-  </div>
-  <div style="display:none" data-authenticated-display="inline">
-    <a href="/p/new/">Create new post</a>
-    <a href="/logout/">Logout</a>
-  </div>
+  {{end}}
+
   <hr>
-  {{if .Posts}}
-      {{range .Posts}}
-        <div class="post">
-          <a href="/p/{{.PostID}}/{{.SlugInfo}}/">{{.Subject}}</a>
-          <div class="post-tagline">
+  {{if .Topics}}
+      {{range .Topics}}
+        <div class="topic">
+          <a href="/t/{{.TopicID}}/{{.SlugInfo}}/">{{.Subject}}</a>
+          <div class="topic-tagline">
             Created by <em>{{.Author.Name}}</em>
             {{.Created | timeago}},
             {{.ViewsCount}} view{{if ne .ViewsCount 1}}s{{end}},
