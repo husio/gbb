@@ -133,13 +133,17 @@ func TopicCreateHandler(
 				return rend.Response(ctx, http.StatusBadRequest, "topic_create.tmpl", content)
 			}
 
-			topic, _, err := store.CreateTopic(ctx, content.Subject, content.Content, user.UserID)
+			topic, comment, err := store.CreateTopic(ctx, content.Subject, content.Content, user.UserID)
 			if err != nil {
 				surf.LogError(ctx, err, "cannot create posts")
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 
-			url := fmt.Sprintf("/t/%d/#bottom", topic.TopicID)
+			url := fmt.Sprintf("/t/%d/%s/#comment-%d",
+				topic.TopicID,
+				topic.SlugInfo(),
+				comment.CommentID,
+			)
 			return surf.Redirect(url, http.StatusSeeOther)
 		}
 
@@ -153,8 +157,6 @@ func CommentListHandler(
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 
-	const commentsPerPage = 100
-
 	type Content struct {
 		CurrentUser *User
 		CsrfField   template.HTML
@@ -166,7 +168,7 @@ func CommentListHandler(
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		postID := surf.PathArgInt64(r, 0)
+		topicID := surf.PathArgInt64(r, 0)
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
 		if err != nil && err != ErrUnauthenticated {
@@ -179,16 +181,23 @@ func CommentListHandler(
 		}
 		offset := (page - 1) * commentsPerPage
 
-		topic, comments, err := store.ListComments(ctx, postID, offset, commentsPerPage)
-		switch err {
+		topic, err := store.TopicByID(ctx, topicID)
+		switch err := castErr(err); err {
 		case nil:
 			// all good
 		case ErrNotFound:
 			w.WriteHeader(http.StatusBadRequest)
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
-			surf.LogError(ctx, err, "cannot fetch topic and comments",
-				"postID", fmt.Sprint(postID))
+			surf.LogError(ctx, err, "cannot fetch topic",
+				"topicID", fmt.Sprint(topicID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		comments, err := store.ListComments(ctx, topicID, offset, commentsPerPage)
+		if err != nil {
+			surf.LogError(ctx, err, "cannot fetch comments",
+				"topicID", fmt.Sprint(topicID))
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
@@ -196,9 +205,9 @@ func CommentListHandler(
 			"topic.id", fmt.Sprint(topic.TopicID),
 			"topic.subject", topic.Subject)
 
-		if err := store.IncrementTopicView(ctx, postID); err != nil {
+		if err := store.IncrementTopicView(ctx, topicID); err != nil {
 			surf.LogError(ctx, err, "cannot increment view counter",
-				"postID", fmt.Sprint(topic.TopicID))
+				"topicID", fmt.Sprint(topic.TopicID))
 		}
 
 		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
@@ -215,6 +224,43 @@ func CommentListHandler(
 	}
 }
 
+const commentsPerPage = 100
+
+// TODO: this handler must redirect to the last comment seen by the user, not
+// to the last comment that belongs to the topic
+func LastCommentHandler(
+	store BBStore,
+	authStore surf.UnboundCacheService,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+		topicID := surf.PathArgInt64(r, 0)
+
+		topic, err := store.TopicByID(ctx, topicID)
+		switch err := castErr(err); err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot fetch topic",
+				"topic", fmt.Sprint(topicID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		// TODO: replace #bottom with #comment-%d
+		var url string
+		if page := int(topic.CommentsCount / commentsPerPage); page < 2 {
+			url = fmt.Sprintf("/t/%d/%s/#bottom", topic.TopicID, topic.SlugInfo())
+		} else {
+			url = fmt.Sprintf("/t/%d/%s/?page=%d#bottom", topic.TopicID, topic.SlugInfo(), page+1)
+		}
+		http.Redirect(w, r, url, http.StatusSeeOther)
+		return nil
+	}
+}
+
 type paginator struct {
 	total    int64
 	pageSize int
@@ -226,7 +272,7 @@ func (p *paginator) CurrentPage() int {
 }
 
 func (p *paginator) PageCount() int {
-	return int(p.total) / p.pageSize
+	return int(p.total)/p.pageSize + 1
 }
 
 func (p *paginator) NextPage() int {
@@ -234,7 +280,7 @@ func (p *paginator) NextPage() int {
 }
 
 func (p *paginator) HasNextPage() bool {
-	return int64((p.page+1)*p.pageSize) < p.total
+	return int64((p.page)*p.pageSize) < p.total
 }
 
 func (p *paginator) PrevPage() int {
@@ -284,7 +330,7 @@ func CommentCreateHandler(
 			return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 		}
 
-		postID := surf.PathArgInt64(r, 0)
+		topicID := surf.PathArgInt64(r, 0)
 		content := strings.TrimSpace(r.Form.Get("content"))
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
@@ -298,20 +344,48 @@ func CommentCreateHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		if len(content) > 0 {
-			switch _, err := store.CreateComment(ctx, postID, content, user.UserID); err {
-			case nil:
-				// all good
-			case ErrNotFound:
-				return surf.StdResponse(ctx, rend, http.StatusBadRequest)
-			default:
-				surf.LogError(ctx, err, "cannot create comment",
-					"content", content,
-					"postID", fmt.Sprint(postID))
-				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
-			}
+		// TODO: validate input
+
+		topic, err := store.TopicByID(ctx, topicID)
+		switch err := castErr(err); err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot fetch topic",
+				"topic", fmt.Sprint(topicID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
-		return surf.Redirect("/t/", http.StatusSeeOther)
+
+		comment, err := store.CreateComment(ctx, topicID, content, user.UserID)
+		switch err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusBadRequest)
+		default:
+			surf.LogError(ctx, err, "cannot create comment",
+				"content", content,
+				"topicID", fmt.Sprint(topicID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		var url string
+		if page := int(topic.CommentsCount / commentsPerPage); page < 2 {
+			url = fmt.Sprintf("/t/%d/%s/#comment-%d",
+				topic.TopicID,
+				topic.SlugInfo(),
+				comment.CommentID)
+		} else {
+			url = fmt.Sprintf("/t/%d/%s/?page=%d#comment-%d",
+				topic.TopicID,
+				topic.SlugInfo(),
+				page+1,
+				comment.CommentID)
+		}
+
+		return surf.Redirect(url, http.StatusSeeOther)
 	}
 }
 

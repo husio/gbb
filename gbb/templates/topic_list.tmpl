@@ -20,6 +20,7 @@
       {{range .Topics}}
         <div class="topic">
           <a href="/t/{{.TopicID}}/{{.SlugInfo}}/">{{.Subject}}</a>
+          <a href="/t/{{.TopicID}}/last-comment/{{.SlugInfo}}/">↘</a>
           <div class="topic-tagline">
             Created by <em>{{.Author.Name}}</em>
             {{.Created | timeago}},

@@ -81,6 +81,7 @@ func main() {
 	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, authStore, renderer))
 	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
 	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
+	rt.Get(`/t/<post-id:[^/]+>/last-comment/.*`, gbb.LastCommentHandler(bbStore, authStore, renderer))
 	rt.Get(`/t/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, authStore, renderer)))
 	rt.Post(`/t/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
 	rt.Get(`/u/<user-id:\d+>/`, gbb.UserDetailsHandler(userStore, authStore, renderer))
