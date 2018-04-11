@@ -1,4 +1,5 @@
-- file upload (?)
 - trace middleware generator for interfaces
 - add "seen" tracking
 - after commenting, go to this comment instead of listing
+- rss/atom
+- search

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -15,14 +16,15 @@ import (
 	"time"
 )
 
-const commentsUrl = "https://www.reddit.com/r/programming/comments.json"
+const commentsUrl = "https://www.reddit.com/r/%s/comments.json"
 
 func main() {
 	bbAddrFl := flag.String("bbaddr", "http://localhost:8000", "Address of BB")
 	repeatFl := flag.Int("repeat", 1, "Repeat each entry")
+	sectionFl := flag.String("section", "news", "Reddit that comments should be uploaded")
 	flag.Parse()
 
-	req, err := http.NewRequest("GET", commentsUrl, nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf(commentsUrl, *sectionFl), nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -488,6 +488,7 @@ func RegisterHandler(
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Context struct {
+		Next   string
 		Login  string
 		Errors map[string]string
 	}
@@ -502,10 +503,13 @@ func RegisterHandler(
 		}
 
 		if r.Method == "GET" {
-			return rend.Response(ctx, http.StatusOK, "register.tmpl", Context{})
+			return rend.Response(ctx, http.StatusOK, "register.tmpl", Context{
+				Next: r.URL.Query().Get("next"),
+			})
 		}
 
 		context := Context{
+			Next:   r.FormValue("next"),
 			Errors: make(map[string]string),
 		}
 
@@ -542,7 +546,11 @@ func RegisterHandler(
 					"name", user.Name)
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			} else {
-				return surf.Redirect("/", http.StatusSeeOther)
+				next := context.Next
+				if next == "" {
+					next = "/"
+				}
+				return surf.Redirect(next, http.StatusSeeOther)
 			}
 		case ErrConstraint:
 			context.Errors["Login"] = "Login already in use"

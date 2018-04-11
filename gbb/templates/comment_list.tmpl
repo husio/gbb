@@ -64,18 +64,26 @@
     <a href="/t/">Back to listing</a>
   </p>
 
-  {{if not .Pagination.HasNextPage}}
-    <form method="POST" action="/t/{{.Topic.TopicID}}/comment/" enctype="multipart/form-data" autocomplete="off">
-      <textarea name="content" id="comment-content" placeholder="Write your comment. Use markdown." required {{if not .CurrentUser}}disabled{{end}}></textarea>
-      <button type="submit" {{if not .CurrentUser}}disabled{{end}}>Comment</button>
-      {{.CsrfField}}
+  {{if .CurrentUser}}
+    {{if .Pagination.HasNextPage}}
+      <div class="box-info">
+        Commenting is possible only from the <a href="/t/{{.Topic.TopicID}}/last-comment/{{.Topic.SlugInfo}}">last page of the topic</a>.
+      </div>
+    {{else}}
+      <form method="POST" action="/t/{{.Topic.TopicID}}/comment/" enctype="multipart/form-data" autocomplete="off">
+        <textarea name="content" id="comment-content" placeholder="Write your comment. Use markdown." required {{if not .CurrentUser}}disabled{{end}}></textarea>
+        <button type="submit" {{if not .CurrentUser}}disabled{{end}}>Comment</button>
+        {{.CsrfField}}
 
-      {{if .CurrentUser}}
         writing as <em>{{.CurrentUser.Name}}</em>
-      {{else}}
-        You must <a href="/login/?next=/t/{{.Topic.TopicID}}/">login</a> to comment.
-      {{end}}
-    </form>
+      </form>
+    {{end}}
+  {{else}}
+    <div class="box-info">
+      You must be authenticated to comment.
+      <a href="/login/?next=/t/{{.Topic.TopicID}}/last-comment/%23bottom">Login</a> with existing account or
+      <a href="/register/?next=/t/{{.Topic.TopicID}}/last-comment/%23bottom">create one</a>.
+    </div>
   {{end}}
 
   <span id="bottom"></span>
