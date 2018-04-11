@@ -79,6 +79,7 @@ func main() {
 
 	rt.Get(`/`, http.RedirectHandler("/t/", http.StatusTemporaryRedirect))
 	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, authStore, renderer))
+	rt.Get(`/t/search/`, gbb.SearchHandler(bbStore, renderer))
 	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
 	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
 	rt.Get(`/t/<post-id:[^/]+>/last-comment/.*`, gbb.LastCommentHandler(bbStore, authStore, renderer))

@@ -582,3 +582,31 @@ var timeFormats = []string{
 	"2006-01-02T15:04",
 	"2006-01-02",
 }
+
+func SearchHandler(
+	bbstore BBStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		searchTerm := strings.TrimSpace(r.URL.Query().Get("q"))
+		if searchTerm == "" {
+			panic("todo")
+		}
+
+		results, err := bbstore.Search(ctx, searchTerm, 100)
+		if err != nil && err != ErrNotFound {
+			surf.LogError(ctx, err, "database failure, cannot search",
+				"searchTerm", searchTerm)
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+		return rend.Response(ctx, http.StatusOK, "search_result.tmpl", struct {
+			SearchTerm string
+			Results    []*SearchResult
+		}{
+			SearchTerm: searchTerm,
+			Results:    results,
+		})
+	}
+}

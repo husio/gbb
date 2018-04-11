@@ -8,9 +8,11 @@
 <body>
   <span id="top"></span>
 
-  <p>
+  <div>
     <a href="/t/">Back to listing</a>
-  </p>
+    |
+    <a href="#bottom">Bottom of the page</a>
+  </div>
 
   <hr>
 
@@ -32,7 +34,7 @@
 
   <hr>
 
-  <p>
+  <div>
     Pagination:
     {{range .Pagination.Pages}}
       {{if .Active}}
@@ -42,9 +44,9 @@
       {{end}}
       {{if not .IsLast}}, {{end}}
     {{end}}
-  </p>
+  </div>
 
-  <p>
+  <div>
     {{if .Pagination.HasPrevPage}}
       <a href="./?page={{.Pagination.PrevPage}}">Previous page</a>
     {{else}}
@@ -56,13 +58,13 @@
     {{else}}
         NextPage
     {{end}}
-  </p>
+  </div>
 
-  <p>
-    <a href="#top">Top of the page</a>
-    |
+  <div>
     <a href="/t/">Back to listing</a>
-  </p>
+    |
+    <a href="#top">Top of the page</a>
+  </div>
 
   {{if .CurrentUser}}
     {{if .Pagination.HasNextPage}}

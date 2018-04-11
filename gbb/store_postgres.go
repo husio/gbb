@@ -168,6 +168,59 @@ func (s *pgBBStore) ListComments(ctx context.Context, topicID int64, offset, lim
 	return comments, castErr(rows.Err())
 }
 
+func (s *pgBBStore) Search(ctx context.Context, text string, limit int64) ([]*SearchResult, error) {
+	var results []*SearchResult
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			t.topic_id,
+			t.subject,
+			t.created,
+			t.author_id,
+			t.views_count,
+			t.comments_count,
+			c.comment_id,
+			c.content,
+			c.created,
+			c.author_id,
+			u.name
+		FROM
+			comments c
+			INNER JOIN topics t ON c.topic_id = t.topic_id
+			INNER JOIN users u ON c.author_id = u.user_id
+		WHERE
+			c.content ILIKE '%' || $1 || '%'
+		ORDER BY
+			c.created ASC
+		LIMIT $2
+	`, text, limit)
+	if err != nil {
+		return nil, fmt.Errorf("cannot execute query: %s", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r SearchResult
+		if err := rows.Scan(
+			&r.Topic.TopicID,
+			&r.Topic.Subject,
+			&r.Topic.Created,
+			&r.Topic.Author.UserID,
+			&r.Topic.ViewsCount,
+			&r.Topic.CommentsCount,
+			&r.Comment.CommentID,
+			&r.Comment.Content,
+			&r.Comment.Created,
+			&r.Comment.Author.UserID,
+			&r.Comment.Author.Name,
+		); err != nil {
+			return results, fmt.Errorf("cannot scan row: %s", err)
+		}
+		results = append(results, &r)
+	}
+
+	return results, castErr(rows.Err())
+}
+
 func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error) {
 	var t Topic
 	row := s.db.QueryRowContext(ctx, `

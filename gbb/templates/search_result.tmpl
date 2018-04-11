@@ -1,0 +1,45 @@
+{{template "header.tmpl"}}
+
+<style>
+.comment { padding: 10px; margin: 20px 0; }
+.comment-content { padding-left: 20px; }
+</style>
+
+<body>
+  <span id="top"></span>
+
+  <div>
+    <a href="/t/">Back to listing</a>
+    |
+    <a href="#bottom">Bottom of the page</a>
+  </div>
+
+  <form action="/t/search/" method="GET" style="display:inline">
+    <input type="search" name="q" value="{{.SearchTerm}}" required>
+    <button>Search</button>
+  </form>
+
+  {{range .Results}}
+    <div>
+      <strong>{{.Topic.Subject}}</strong>
+      <div class="comment-header">
+        <a href="/u/{{.Comment.Author.UserID}}/">{{.Comment.Author.Name}}</a>
+        at <span title="{{.Comment.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Comment.Created.Format "Monday, _2 Jan 2006"}}</span>
+      </div>
+      <div class="comment-content">
+        <p>{{.Comment.Content | markdown}}</p>
+      </div>
+    </div>
+  {{else}}
+    No results.
+  {{end}}
+
+
+  <div>
+    <a href="/t/">Back to listing</a>
+    |
+    <a href="#top">Top of the page</a>
+  </div>
+
+  <span id="bottom"></span>
+</body>

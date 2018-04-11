@@ -7,6 +7,7 @@
 </style>
 
 <body>
+  <div class="menu">
   {{if .CurrentUser}}
     <a href="/t/new/">Create new topic</a>
     <span class="separator"></span>
@@ -14,8 +15,8 @@
   {{else}}
     <a href="/login/">Login</a>
   {{end}}
+  </div>
 
-  <hr>
   {{if .Topics}}
       {{range .Topics}}
         <div class="topic">
@@ -30,10 +31,17 @@
         </div>
       {{end}}
 
-      <hr>
-      {{if .NextPageAfter}}
-        <a href="./?after={{.NextPageAfter}}">Next</a>
-      {{end}}
+
+      <div class="menu">
+        {{if .NextPageAfter}}
+          <a href="./?after={{.NextPageAfter}}">Next Page</a>
+        {{end}}
+        |
+        <form action="/t/search/" method="GET" style="display:inline">
+          <input type="search" name="q" required>
+          <button>Search</button>
+        </form>
+      </div>
   {{else}}
     <div>No posts</div>
   {{end}}

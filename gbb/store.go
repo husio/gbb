@@ -22,6 +22,8 @@ type BBStore interface {
 	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
 
 	IncrementTopicView(ctx context.Context, postID int64) error
+
+	Search(ctx context.Context, searchText string, limit int64) ([]*SearchResult, error)
 }
 
 type User struct {
@@ -61,6 +63,11 @@ type Comment struct {
 	Content   string
 	Created   time.Time
 	Author    User
+}
+
+type SearchResult struct {
+	Topic   Topic
+	Comment Comment
 }
 
 var (
