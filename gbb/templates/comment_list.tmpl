@@ -16,38 +16,41 @@
 
   <h1>
     {{.Topic.Subject}}
-    {{if eq .Topic.Author.UserID .CurrentUser.UserID}}
-      {{with $firstComment := index .Comments 0}}
-        <small>
-          <a href="/c/{{$firstComment.CommentID}}/">edit</a>
-        </small>
+    {{if .CurrentUser.Authenticated}}
+      {{if eq .Topic.Author.UserID .CurrentUser.UserID}}
+        {{with $firstComment := index .Comments 0}}
+          <small>
+            <a href="/c/{{$firstComment.CommentID}}/">edit</a>
+          </small>
+        {{end}}
       {{end}}
     {{end}}
   </h1>
-  {{with $root := .}}
-  {{range $root.Comments}}
-    <div class="comment" id="comment-{{.CommentID}}">
-      <div class="comment-header">
-        <a href="#comment-{{.CommentID}}" title="direct link to the comment">#</a>
-        <a href="/u/{{.Author.UserID}}/">{{.Author.Name}}</a>
-        at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
 
-        {{if eq .Author.UserID $root.CurrentUser.UserID}}
-          <span class="separator"></span>
-          <a href="/c/{{.CommentID}}/">edit</a>
-        {{end}}
-        {{if eq .Author.UserID $root.CurrentUser.UserID}}
-          <span class="separator"></span>
-          <a href="/c/{{.CommentID}}/">delete</a>
-        {{end}}
+  {{with $root := .}}
+    {{range $root.Comments}}
+      <div class="comment" id="comment-{{.CommentID}}">
+        <div class="comment-header">
+          <a href="#comment-{{.CommentID}}" title="direct link to the comment">#</a>
+          <a href="/u/{{.Author.UserID}}/">{{.Author.Name}}</a>
+          at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
+
+          {{if $root.CurrentUser.Authenticated}}
+            {{if eq .Author.UserID $root.CurrentUser.UserID}}
+              <span class="separator"></span>
+              <a href="/c/{{.CommentID}}/">edit</a>
+              <span class="separator"></span>
+              <a href="/c/{{.CommentID}}/">delete</a>
+            {{end}}
+          {{end}}
+        </div>
+        <div class="comment-content">
+          <p>{{.Content | markdown}}</p>
+        </div>
       </div>
-      <div class="comment-content">
-        <p>{{.Content | markdown}}</p>
-      </div>
-    </div>
-  {{else}}
-    No comments
-  {{end}}
+    {{else}}
+      No comments
+    {{end}}
   {{end}}
 
   <div class="menu">
@@ -66,15 +69,15 @@
     {{end}}
   </div>
 
-  {{if .CurrentUser}}
+  {{if .CurrentUser.Authenticated}}
     {{if .Pagination.HasNextPage}}
       <div class="box-info">
         Commenting is possible only from the <a href="/t/{{.Topic.TopicID}}/last-comment/{{.Topic.SlugInfo}}">last page of the topic</a>.
       </div>
     {{else}}
       <form method="POST" action="/t/{{.Topic.TopicID}}/comment/" enctype="multipart/form-data" autocomplete="off">
-        <textarea name="content" id="comment-content" placeholder="Write your comment. Use markdown." required {{if not .CurrentUser}}disabled{{end}}></textarea>
-        <button type="submit" {{if not .CurrentUser}}disabled{{end}}>Comment</button>
+        <textarea name="content" id="comment-content" placeholder="Write your comment. Use markdown." required {{if not .CurrentUser.Authenticated}}disabled{{end}}></textarea>
+        <button type="submit" {{if not .CurrentUser.Authenticated}}disabled{{end}}>Comment</button>
         {{.CsrfField}}
 
         writing as <em>{{.CurrentUser.Name}}</em>
