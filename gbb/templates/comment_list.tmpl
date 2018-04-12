@@ -8,13 +8,11 @@
 <body>
   <span id="top"></span>
 
-  <div>
+  <div class="menu">
     <a href="/t/">Back to listing</a>
     |
     <a href="#bottom">Bottom of the page</a>
   </div>
-
-  <hr>
 
   <h1>{{.Topic.Subject}}</h1>
   {{range .Comments}}
@@ -32,10 +30,12 @@
     No comments
   {{end}}
 
-  <hr>
-
-  <div>
-    Pagination:
+  <div class="menu">
+    <a href="/t/">Back to listing</a>
+    |
+    <a href="#top">Top of the page</a>
+    |
+    Page:
     {{range .Pagination.Pages}}
       {{if .Active}}
         {{.Number}}
@@ -44,26 +44,6 @@
       {{end}}
       {{if not .IsLast}}, {{end}}
     {{end}}
-  </div>
-
-  <div>
-    {{if .Pagination.HasPrevPage}}
-      <a href="./?page={{.Pagination.PrevPage}}">Previous page</a>
-    {{else}}
-      Previous page
-    {{end}}
-    | Page {{.Pagination.CurrentPage}} of {{.Pagination.PageCount}} |
-    {{if .Pagination.HasNextPage}}
-      <a href="./?page={{.Pagination.NextPage}}">Next page</a>
-    {{else}}
-        NextPage
-    {{end}}
-  </div>
-
-  <div>
-    <a href="/t/">Back to listing</a>
-    |
-    <a href="#top">Top of the page</a>
   </div>
 
   {{if .CurrentUser}}
