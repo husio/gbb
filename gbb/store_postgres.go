@@ -402,6 +402,90 @@ func castErr(err error) error {
 	}
 }
 
+func (s *pgBBStore) UpdateComment(ctx context.Context, commentID int64, content string) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE comments
+		SET content = $2
+		WHERE comment_id = $1
+	`, commentID, content)
+	if err != nil {
+		return castErr(err)
+	}
+
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgBBStore) UpdateTopic(ctx context.Context, topicID int64, subject string) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE topics
+		SET subject = $2
+		WHERE topic_id = $1
+	`, topicID, subject)
+	if err != nil {
+		return castErr(err)
+	}
+
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *Comment, int, error) {
+	var (
+		t          Topic
+		c          Comment
+		commentPos int
+	)
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			t.topic_id,
+			t.subject,
+			t.created,
+			t.views_count,
+			t.comments_count,
+			tu.user_id AS topic_user_id,
+			tu.name AS topic_user_name,
+			c.comment_id,
+			c.content,
+			c.created,
+			cu.user_id AS comment_user_id,
+			cu.name AS comment_user_name,
+			(SELECT COUNT(*) FROM comments WHERE topic_id = c.topic_id AND created < c.created) AS comment_pos
+		FROM
+			comments c
+			INNER JOIN users cu ON c.author_id = cu.user_id
+			INNER JOIN topics t ON t.topic_id = c.topic_id
+			INNER JOIN users tu ON t.author_id = tu.user_id
+		WHERE
+			c.comment_id = $1
+		LIMIT 1
+	`, commentID)
+	err := row.Scan(
+		&t.TopicID,
+		&t.Subject,
+		&t.Created,
+		&t.ViewsCount,
+		&t.CommentsCount,
+		&t.Author.UserID,
+		&t.Author.Name,
+		&c.CommentID,
+		&c.Content,
+		&c.Created,
+		&c.Author.UserID,
+		&c.Author.Name,
+		&commentPos,
+	)
+	return &t, &c, commentPos, castErr(err)
+}
+
 func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) (*User, error) {
 	var passhash string
 	switch err := s.db.QueryRowContext(ctx, `

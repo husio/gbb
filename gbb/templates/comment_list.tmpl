@@ -10,17 +10,36 @@
 
   <div class="menu">
     <a href="/t/">Back to listing</a>
-    |
+    <span class="separator"></span>
     <a href="#bottom">Bottom of the page</a>
   </div>
 
-  <h1>{{.Topic.Subject}}</h1>
-  {{range .Comments}}
+  <h1>
+    {{.Topic.Subject}}
+    {{if eq .Topic.Author.UserID .CurrentUser.UserID}}
+      {{with $firstComment := index .Comments 0}}
+        <small>
+          <a href="/c/{{$firstComment.CommentID}}/">edit</a>
+        </small>
+      {{end}}
+    {{end}}
+  </h1>
+  {{with $root := .}}
+  {{range $root.Comments}}
     <div class="comment" id="comment-{{.CommentID}}">
       <div class="comment-header">
         <a href="#comment-{{.CommentID}}" title="direct link to the comment">#</a>
         <a href="/u/{{.Author.UserID}}/">{{.Author.Name}}</a>
         at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
+
+        {{if eq .Author.UserID $root.CurrentUser.UserID}}
+          <span class="separator"></span>
+          <a href="/c/{{.CommentID}}/">edit</a>
+        {{end}}
+        {{if eq .Author.UserID $root.CurrentUser.UserID}}
+          <span class="separator"></span>
+          <a href="/c/{{.CommentID}}/">delete</a>
+        {{end}}
       </div>
       <div class="comment-content">
         <p>{{.Content | markdown}}</p>
@@ -29,12 +48,13 @@
   {{else}}
     No comments
   {{end}}
+  {{end}}
 
   <div class="menu">
     <a href="/t/">Back to listing</a>
-    |
+    <span class="separator"></span>
     <a href="#top">Top of the page</a>
-    |
+    <span class="separator"></span>
     Page:
     {{range .Pagination.Pages}}
       {{if .Active}}

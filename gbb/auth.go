@@ -22,10 +22,10 @@ func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, erro
 		return &u, nil
 	case surf.ErrMiss:
 		span.Finish()
-		return nil, ErrUnauthenticated
+		return &u, ErrUnauthenticated
 	default:
 		span.Finish()
-		return nil, err
+		return &u, err
 	}
 }
 

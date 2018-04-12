@@ -1,21 +1,35 @@
+{{define "menu"}}
+  <div class="menu">
+    <a href="/t/new/">New Topic</a>
+    <span class="separator"></span>
+    <a href="/t/search/">Search</a>
+
+    {{if .NextPageAfter}}
+      <span class="separator"></span>
+      <a href="./?after={{.NextPageAfter}}">Next Page</a>
+    {{end}}
+
+    <span class="separator"></span>
+    {{if .CurrentUser}}
+      <a href="/logout/" title="Logged as {{.CurrentUser.Name}}">Logout</a>
+    {{else}}
+      <a href="/login/">Login</a>
+    {{end}}
+  </div>
+
+{{end}}
+
+
+
 {{template "header.tmpl"}}
 
 <style>
-.separator:after { content: " | "; padding: 0 10px; }
 .topic { margin: 8px 0; }
 .topic-tagline { font-size:80%; padding-left: 10px; color: #444; }
 </style>
 
 <body>
-  <div class="menu">
-  {{if .CurrentUser}}
-    <a href="/t/new/">Create new topic</a>
-    <span class="separator"></span>
-    <a href="/logout/" title="Logged as {{.CurrentUser.Name}}">Logout</a>
-  {{else}}
-    <a href="/login/">Login</a>
-  {{end}}
-  </div>
+  {{template "menu" .}}
 
   {{if .Topics}}
       {{range .Topics}}
@@ -30,19 +44,9 @@
           </div>
         </div>
       {{end}}
-
-
-      <div class="menu">
-        {{if .NextPageAfter}}
-          <a href="./?after={{.NextPageAfter}}">Next Page</a>
-        {{end}}
-        |
-        <form action="/t/search/" method="GET" style="display:inline">
-          <input type="search" name="q" required>
-          <button>Search</button>
-        </form>
-      </div>
   {{else}}
     <div class="box-info">No topics.</div>
   {{end}}
+
+  {{template "menu" .}}
 </body>

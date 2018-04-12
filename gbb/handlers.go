@@ -109,7 +109,8 @@ func TopicCreateHandler(
 
 		if r.Method == "POST" {
 			if err := r.ParseMultipartForm(1e6); err != nil {
-				fmt.Println("Invalid content type", err)
+				surf.LogInfo(ctx, "invalid content type",
+					"error", err.Error())
 				return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 			}
 
@@ -533,23 +534,161 @@ func SearchHandler(
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 
-		searchTerm := strings.TrimSpace(r.URL.Query().Get("q"))
-		if searchTerm == "" {
-			panic("todo")
-		}
-
-		results, err := bbstore.Search(ctx, searchTerm, 100)
-		if err != nil && err != ErrNotFound {
-			surf.LogError(ctx, err, "database failure, cannot search",
-				"searchTerm", searchTerm)
-			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
-		}
-		return rend.Response(ctx, http.StatusOK, "search_result.tmpl", struct {
+		content := struct {
 			SearchTerm string
 			Results    []*SearchResult
 		}{
-			SearchTerm: searchTerm,
-			Results:    results,
-		})
+			SearchTerm: strings.TrimSpace(r.URL.Query().Get("q")),
+		}
+
+		if content.SearchTerm != "" {
+			results, err := bbstore.Search(ctx, content.SearchTerm, 100)
+			if err != nil && err != ErrNotFound {
+				surf.LogError(ctx, err, "database failure, cannot search",
+					"searchTerm", content.SearchTerm)
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+			}
+			content.Results = results
+		}
+
+		return rend.Response(ctx, http.StatusOK, "search_result.tmpl", content)
+	}
+}
+
+func CommentEditHandler(
+	authStore surf.UnboundCacheService,
+	bbstore BBStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		switch err {
+		case nil:
+			// all good
+		case ErrUnauthenticated:
+			return surf.StdResponse(ctx, rend, http.StatusUnauthorized)
+		default:
+			surf.LogError(ctx, err, "cannot get current user")
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		topic, comment, commentPos, err := bbstore.CommentByID(ctx, surf.PathArgInt64(r, 0))
+		switch err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot get comment",
+				"comment", surf.PathArg(r, 0))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		if comment.Author.UserID != user.UserID {
+			surf.LogInfo(ctx, "rejected edit because of permissions",
+				"user", fmt.Sprint(user.UserID),
+				"author", fmt.Sprint(comment.Author.UserID),
+				"comment", fmt.Sprint(comment.CommentID))
+			return surf.StdResponse(ctx, rend, http.StatusForbidden)
+		}
+
+		content := struct {
+			Errors struct {
+				Subject string
+				Content string
+			}
+			CurrentUser *User
+			Topic       *Topic
+			Comment     *Comment
+			CommentPos  int
+			CsrfField   template.HTML
+			Input       struct {
+				Subject string
+				Content string
+			}
+		}{
+			CurrentUser: user,
+			Topic:       topic,
+			Comment:     comment,
+			CommentPos:  commentPos,
+			CsrfField:   surf.CsrfField(ctx),
+			Input: struct {
+				Subject string
+				Content string
+			}{
+				Subject: topic.Subject,
+				Content: comment.Content,
+			},
+		}
+
+		if r.Method == "GET" {
+			return rend.Response(ctx, http.StatusOK, "comment_edit.tmpl", content)
+		}
+
+		if err := r.ParseMultipartForm(1e6); err != nil {
+			surf.LogInfo(ctx, "invalid content type",
+				"error", err.Error())
+			return surf.StdResponse(ctx, rend, http.StatusBadRequest)
+		}
+
+		content.Input.Content = strings.TrimSpace(r.Form.Get("content"))
+		if cLen := len(content.Input.Content); cLen == 0 {
+			content.Errors.Content = "Required."
+		} else if cLen < 2 {
+			content.Errors.Content = "Too short. Must be at least 2 characters."
+		}
+
+		if commentPos == 0 {
+			content.Input.Subject = strings.TrimSpace(r.Form.Get("subject"))
+			if sLen := len(content.Input.Subject); sLen == 0 {
+				content.Errors.Subject = "Required."
+			} else if sLen < 2 {
+				content.Errors.Subject = "Too short. Must be at least 2 characters."
+			}
+		}
+
+		if content.Errors.Subject == "" && content.Errors.Content == "" {
+			if commentPos == 0 && topic.Subject != content.Input.Subject {
+				switch err := bbstore.UpdateTopic(ctx, topic.TopicID, content.Input.Subject); err {
+				case nil:
+					// all good
+				case ErrNotFound:
+					return surf.StdResponse(ctx, rend, http.StatusNotFound)
+				default:
+					surf.LogError(ctx, err, "cannot update topic",
+						"user", fmt.Sprint(user.UserID),
+						"topic", fmt.Sprint(topic.TopicID))
+					return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+				}
+			}
+			switch err := bbstore.UpdateComment(ctx, comment.CommentID, content.Input.Content); err {
+			case nil:
+				var url string
+				if page := int(commentPos / commentsPerPage); page < 2 {
+					url = fmt.Sprintf("/t/%d/%s/#comment-%d",
+						topic.TopicID,
+						topic.SlugInfo(),
+						comment.CommentID)
+				} else {
+					url = fmt.Sprintf("/t/%d/%s/?page=%d#comment-%d",
+						topic.TopicID,
+						topic.SlugInfo(),
+						page+1,
+						comment.CommentID)
+				}
+				return surf.Redirect(url, http.StatusSeeOther)
+			case ErrNotFound:
+				return surf.StdResponse(ctx, rend, http.StatusNotFound)
+			default:
+				surf.LogError(ctx, err, "cannot update content",
+					"user", fmt.Sprint(user.UserID),
+					"content", fmt.Sprint(comment.CommentID))
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+			}
+		}
+
+		return rend.Response(ctx, http.StatusOK, "comment_edit.tmpl", content)
 	}
 }

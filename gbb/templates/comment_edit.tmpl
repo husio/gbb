@@ -1,0 +1,22 @@
+{{template "header.tmpl"}}
+
+<form method="POST" action="." enctype="multipart/form-data" autocomplete="off">
+  <fieldset>
+    <input type="text" name="subject" value="{{.Input.Subject}}" placeholder="Subject" required {{if ne .CommentPos 0}}disabled{{end}}>
+    {{if .Errors.Subject -}}
+      <div>{{.Errors.Subject}}</div>
+    {{- end}}
+  </fieldset>
+
+  <fieldset>
+    <textarea name="content" placeholder="Content" required>{{.Input.Content}}</textarea>
+      Use <a href="https://gist.github.com/budparr/9257428">markdown</a> to format content.
+    {{if .Errors.Content -}}
+      <div>{{.Errors.Content}}</div>
+    {{- end}}
+  </fieldset>
+
+  {{.CsrfField}}
+
+  <button type="submit">Save</button> or <a href="#" onclick="history.back(-1)">go back</a>
+</form>

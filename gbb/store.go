@@ -16,12 +16,15 @@ type UserStore interface {
 
 type BBStore interface {
 	ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error)
-	TopicByID(ctx context.Context, topicID int64) (*Topic, error)
-	ListComments(ctx context.Context, topicID int64, offset, limit int) ([]*Comment, error)
 	CreateTopic(ctx context.Context, subject, content string, userID int64) (*Topic, *Comment, error)
-	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
-
+	TopicByID(ctx context.Context, topicID int64) (*Topic, error)
+	UpdateTopic(ctx context.Context, topicID int64, subject string) error
 	IncrementTopicView(ctx context.Context, postID int64) error
+
+	ListComments(ctx context.Context, topicID int64, offset, limit int) ([]*Comment, error)
+	CommentByID(ctx context.Context, commentID int64) (*Topic, *Comment, int, error)
+	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
+	UpdateComment(ctx context.Context, commentID int64, content string) error
 
 	Search(ctx context.Context, searchText string, limit int64) ([]*SearchResult, error)
 }
@@ -29,6 +32,10 @@ type BBStore interface {
 type User struct {
 	UserID int64
 	Name   string
+}
+
+func (u *User) Authenticated() bool {
+	return u != nil && u.UserID > 0
 }
 
 type UserInfo struct {
