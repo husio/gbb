@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/husio/gbb/pkg/surf"
 	"github.com/husio/gbb/pkg/surf/sqldb"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func NewPostgresBBStore(db *sql.DB) BBStore {
@@ -20,64 +18,6 @@ func NewPostgresBBStore(db *sql.DB) BBStore {
 
 type pgBBStore struct {
 	db sqldb.Database
-}
-
-func NewPostgresUserStore(db *sql.DB) UserStore {
-	return &pgUserStore{
-		db: sqldb.PostgresDatabase(db),
-	}
-}
-
-type pgUserStore struct {
-	db sqldb.Database
-}
-
-const schema = `
-CREATE TABLE IF NOT EXISTS users (
-	user_id SERIAL PRIMARY KEY,
-	password TEXT NOT NULL,
-	name TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS topics (
-	topic_id SERIAL PRIMARY KEY,
-	subject TEXT NOT NULL,
-	created TIMESTAMPTZ NOT NULL,
-	author_id INTEGER NOT NULL REFERENCES users(user_id),
-
-	views_count INTEGER NOT NULL default 0 CHECK (views_count >= 0),
-	comments_count INTEGER NOT NULL default 1 CHECK (comments_count >= 0),
-	latest_comment TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS comments (
-	comment_id SERIAL PRIMARY KEY,
-	topic_id INTEGER NOT NULL REFERENCES topics(topic_id),
-	content TEXT NOT NULL,
-	created TIMESTAMPTZ NOT NULL,
-	author_id INTEGER NOT NULL REFERENCES users(user_id)
-);
-
-CREATE INDEX IF NOT EXISTS comments_created_idx ON comments(created);
-
-
-ALTER TABLE topics ADD COLUMN IF NOT EXISTS latest_comment TIMESTAMPTZ NOT NULL DEFAULT now();
-
-CREATE INDEX IF NOT EXISTS topics_created_idx ON topics(latest_comment);
-
-`
-
-func EnsureSchema(db *sql.DB) error {
-	for i, query := range strings.Split(schema, ";\n\n") {
-		if _, err := db.Exec(query); err != nil {
-			begin := query
-			if len(begin) > 60 {
-				begin = begin[:58] + ".."
-			}
-			return fmt.Errorf("cannot execute %d query (%q): %s", i, begin, err)
-		}
-	}
-	return nil
 }
 
 func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {
@@ -391,17 +331,6 @@ func (s *pgBBStore) IncrementTopicView(ctx context.Context, topicID int64) error
 	return nil
 }
 
-func castErr(err error) error {
-	switch err {
-	case sqldb.ErrNotFound:
-		return ErrNotFound
-	case sqldb.ErrConstraint:
-		return ErrConstraint
-	default:
-		return err
-	}
-}
-
 func (s *pgBBStore) UpdateComment(ctx context.Context, commentID int64, content string) error {
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE comments
@@ -436,6 +365,63 @@ func (s *pgBBStore) UpdateTopic(ctx context.Context, topicID int64, subject stri
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *pgBBStore) DeleteTopic(ctx context.Context, topicID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("cannot start transaction: %s", err)
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.ExecContext(ctx, `DELETE FROM comments WHERE topic_id = $1`, topicID); err != nil {
+		return castErr(err)
+	}
+
+	if res, err := tx.ExecContext(ctx, `DELETE FROM topics WHERE topic_id = $1`, topicID); err != nil {
+		return castErr(err)
+	} else {
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return ErrNotFound
+		}
+	}
+	return castErr(tx.Commit())
+}
+
+func (s *pgBBStore) DeleteComment(ctx context.Context, commentID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("cannot start transaction: %s", err)
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRowContext(ctx, `
+		DELETE FROM comments
+		WHERE comment_id = $1
+		RETURNING topic_id
+	`, commentID)
+	var topicID int64
+	if err := row.Scan(&topicID); err != nil {
+		return castErr(err)
+	}
+
+	res, err := tx.ExecContext(ctx, `
+		UPDATE topics
+		SET comments_count = (SELECT COUNT(*) - 1 FROM comments WHERE topic_id = $1)
+		WHERE topic_id = $1
+	`, topicID)
+	if err != nil {
+		return castErr(err)
+	} else {
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return ErrNotFound
+		}
+	}
+	return castErr(tx.Commit())
 }
 
 func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *Comment, int, error) {
@@ -484,71 +470,4 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 		&commentPos,
 	)
 	return &t, &c, commentPos, castErr(err)
-}
-
-func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) (*User, error) {
-	var passhash string
-	switch err := s.db.QueryRowContext(ctx, `
-		SELECT password
-		FROM users
-		WHERE name = $1
-		LIMIT 1
-	`, login).Scan(&passhash); err {
-	case nil:
-		// all good
-	case sqldb.ErrNotFound:
-		return nil, ErrNotFound
-	default:
-		return nil, fmt.Errorf("database: %s", err)
-	}
-
-	switch err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(password)); err {
-	case nil:
-		// all good
-	case bcrypt.ErrMismatchedHashAndPassword:
-		return nil, ErrNotFound
-	default:
-		return nil, fmt.Errorf("bcrypt: %s", err)
-	}
-
-	var u User
-	err := s.db.QueryRowContext(ctx, `
-		SELECT user_id, name
-		FROM users
-		WHERE name = $1
-		LIMIT 1
-	`, login).Scan(&u.UserID, &u.Name)
-	return &u, castErr(err)
-}
-
-func (s *pgUserStore) Register(ctx context.Context, password string, u User) (*User, error) {
-	passhash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("cannot hash password: %s", err)
-	}
-	err = s.db.QueryRowContext(ctx, `
-		INSERT INTO users (password, name)
-		VALUES ($1, $2)
-		RETURNING user_id
-	`, passhash, u.Name).Scan(&u.UserID)
-	if err := castErr(err); err != nil {
-		return nil, err
-	}
-	return &u, nil
-}
-
-func (s *pgUserStore) UserInfo(ctx context.Context, userID int64) (*UserInfo, error) {
-	u := UserInfo{
-		User: User{UserID: userID},
-	}
-	err := s.db.QueryRowContext(ctx, `
-		SELECT
-			u.name,
-			(SELECT COUNT(*) FROM topics t WHERE t.author_id = u.user_id) AS topics_count,
-			(SELECT COUNT(*) FROM comments c WHERE c.author_id = u.user_id) AS comments_count
-		FROM users u
-		WHERE u.user_id = $1
-		LIMIT 1
-	`, userID).Scan(&u.Name, &u.TopicsCount, &u.CommentsCount)
-	return &u, castErr(err)
 }

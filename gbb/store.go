@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/husio/gbb/pkg/surf/sqldb"
 )
 
 type UserStore interface {
@@ -20,11 +22,13 @@ type BBStore interface {
 	TopicByID(ctx context.Context, topicID int64) (*Topic, error)
 	UpdateTopic(ctx context.Context, topicID int64, subject string) error
 	IncrementTopicView(ctx context.Context, postID int64) error
+	DeleteTopic(ctx context.Context, topicID int64) error
 
 	ListComments(ctx context.Context, topicID int64, offset, limit int) ([]*Comment, error)
 	CommentByID(ctx context.Context, commentID int64) (*Topic, *Comment, int, error)
 	CreateComment(ctx context.Context, postID int64, content string, userID int64) (*Comment, error)
 	UpdateComment(ctx context.Context, commentID int64, content string) error
+	DeleteComment(ctx context.Context, commentID int64) error
 
 	Search(ctx context.Context, searchText string, limit int64) ([]*SearchResult, error)
 }
@@ -81,3 +85,15 @@ var (
 	ErrNotFound   = errors.New("not found")
 	ErrConstraint = errors.New("constraint")
 )
+
+// castErr map sql error to gbb's local representation
+func castErr(err error) error {
+	switch err {
+	case sqldb.ErrNotFound:
+		return ErrNotFound
+	case sqldb.ErrConstraint:
+		return ErrConstraint
+	default:
+		return err
+	}
+}

@@ -692,3 +692,92 @@ func CommentEditHandler(
 		return rend.Response(ctx, http.StatusOK, "comment_edit.tmpl", content)
 	}
 }
+
+func CommentDeleteHandler(
+	authStore surf.UnboundCacheService,
+	bbstore BBStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		commentID := surf.PathArgInt64(r, 0)
+
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		switch err {
+		case nil:
+			// all good
+		case ErrUnauthenticated:
+			return surf.StdResponse(ctx, rend, http.StatusUnauthorized)
+		default:
+			surf.LogError(ctx, err, "cannot get current user")
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		topic, comment, pos, err := bbstore.CommentByID(ctx, commentID)
+		switch err {
+		case nil:
+			if comment.Author.UserID != user.UserID {
+				surf.LogInfo(ctx, "comment deletion forbidden",
+					"comment", fmt.Sprint(commentID),
+					"author", fmt.Sprint(comment.Author.UserID),
+					"user", fmt.Sprint(user.UserID))
+				return surf.StdResponse(ctx, rend, http.StatusForbidden)
+			}
+		case ErrNotFound:
+			surf.LogInfo(ctx, "comment not found",
+				"comment", fmt.Sprint(commentID))
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot get comment",
+				"comment", fmt.Sprint(commentID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		if r.Method == "GET" {
+			return rend.Response(ctx, http.StatusOK, "comment_delete.tmpl", struct {
+				CsrfField  template.HTML
+				Topic      *Topic
+				Comment    *Comment
+				CommentPos int
+			}{
+				CsrfField:  surf.CsrfField(ctx),
+				Topic:      topic,
+				Comment:    comment,
+				CommentPos: pos,
+			})
+		}
+
+		// if it's the first comment, the entire topic is being deleted
+		if pos == 0 {
+			switch err := bbstore.DeleteTopic(ctx, topic.TopicID); err {
+			case nil:
+				// all good
+			case ErrNotFound:
+				surf.LogInfo(ctx, "cannot delete because topic not found",
+					"comment", fmt.Sprint(commentID))
+				return surf.StdResponse(ctx, rend, http.StatusNotFound)
+			default:
+				surf.LogError(ctx, err, "cannot delete topic",
+					"comment", fmt.Sprint(commentID))
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+			}
+			return surf.Redirect("/t/", http.StatusSeeOther)
+		}
+
+		switch err := bbstore.DeleteComment(ctx, commentID); err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			surf.LogInfo(ctx, "cannot delete because comment not found",
+				"comment", fmt.Sprint(commentID))
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot delete comment",
+				"comment", fmt.Sprint(commentID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+		return surf.Redirect(fmt.Sprintf("/t/%d/%s/", topic.TopicID, topic.SlugInfo()), http.StatusSeeOther)
+
+	}
+}

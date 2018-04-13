@@ -1,0 +1,32 @@
+{{template "header.tmpl"}}
+
+<form method="POST" action="." enctype="multipart/form-data" autocomplete="off">
+  {{.CsrfField}}
+
+  {{if eq .CommentPos 0}}
+    <div class="box-danger">
+      Deleting entire topic.
+    </div>
+
+    <h1>{{.Topic.Subject}}</h1>
+
+    <p>
+      {{.Topic.CommentsCount}} comments, {{.Topic.ViewsCount}} views.
+    </p>
+    <button type="submit">Delete topic</button>
+  {{else}}
+    <div class="box-danger">
+      Deleting single comment.
+    </div>
+
+    <h1>{{.Topic.Subject}}</h1>
+    Created by {{.Comment.Author.Name}} at <span title="{{.Comment.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Comment.Created.Format "Monday, _2 Jan 2006"}}</span>
+    <div class="comment-content">
+      <p>{{.Comment.Content | markdown}}</p>
+    </div>
+    <button type="submit">Delete comment</button>
+  {{end}}
+
+
+  or <a href="#" onclick="history.back(-1)">go back</a>
+</form>

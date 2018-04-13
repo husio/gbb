@@ -14,18 +14,7 @@
     <a href="#bottom">Bottom of the page</a>
   </div>
 
-  <h1>
-    {{.Topic.Subject}}
-    {{if .CurrentUser.Authenticated}}
-      {{if eq .Topic.Author.UserID .CurrentUser.UserID}}
-        {{with $firstComment := index .Comments 0}}
-          <small>
-            <a href="/c/{{$firstComment.CommentID}}/">edit</a>
-          </small>
-        {{end}}
-      {{end}}
-    {{end}}
-  </h1>
+  <h1>{{.Topic.Subject}}</h1>
 
   {{with $root := .}}
     {{range $root.Comments}}
@@ -38,9 +27,9 @@
           {{if $root.CurrentUser.Authenticated}}
             {{if eq .Author.UserID $root.CurrentUser.UserID}}
               <span class="separator"></span>
-              <a href="/c/{{.CommentID}}/">edit</a>
+              <a href="/c/{{.CommentID}}/edit/">edit</a>
               <span class="separator"></span>
-              <a href="/c/{{.CommentID}}/">delete</a>
+              <a href="/c/{{.CommentID}}/delete/">delete</a>
             {{end}}
           {{end}}
         </div>
