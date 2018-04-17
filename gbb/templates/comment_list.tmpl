@@ -1,5 +1,7 @@
 {{template "header.tmpl"}}
 
+<link rel="canonical" href="/t/{{.Topic.TopicID}}/?page={{.Pagination.CurrentPage}}">
+
 <style>
 .comment { padding: 10px; margin: 20px 0; }
 .comment-content { padding-left: 20px; }
@@ -12,6 +14,8 @@
     <a href="/t/">Back to listing</a>
     <span class="separator"></span>
     <a href="#bottom">Bottom of the page</a>
+    <span class="separator"></span>
+    <a href="/t/search/">Search</a>
     <span class="separator"></span>
     {{if .CurrentUser}}
       <a href="/logout/">Logout</a>
@@ -29,14 +33,16 @@
         <div class="comment-header">
           <a href="#comment-{{.CommentID}}" title="direct link to the comment">#</a>
           <a href="/u/{{.Author.UserID}}/">{{.Author.Name}}</a>
-          at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
-
-          {{if call $root.CanModify .}}
+          <small>
             <span class="separator"></span>
-            <a href="/c/{{.CommentID}}/edit/">edit</a>
-            <span class="separator"></span>
-            <a href="/c/{{.CommentID}}/delete/">delete</a>
-          {{end}}
+            <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created | timeago}}</span>
+            {{if call $root.CanModify .}}
+              <span class="separator"></span>
+              <a href="/c/{{.CommentID}}/edit/">edit</a>
+              <span class="separator"></span>
+              <a href="/c/{{.CommentID}}/delete/">delete</a>
+            {{end}}
+          </small>
         </div>
         <div class="comment-content">
           <p>{{.Content | markdown}}</p>
@@ -51,6 +57,8 @@
     <a href="/t/">Back to listing</a>
     <span class="separator"></span>
     <a href="#top">Top of the page</a>
+    <span class="separator"></span>
+    <a href="/t/search/">Search</a>
     <span class="separator"></span>
     Page:
     {{range .Pagination.Pages}}

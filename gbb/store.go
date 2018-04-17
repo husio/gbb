@@ -30,7 +30,7 @@ type BBStore interface {
 	UpdateComment(ctx context.Context, commentID int64, content string) error
 	DeleteComment(ctx context.Context, commentID int64) error
 
-	Search(ctx context.Context, searchText string, limit int64) ([]*SearchResult, error)
+	Search(ctx context.Context, searchText string, offset, limit int64) ([]*SearchResult, error)
 }
 
 type User struct {

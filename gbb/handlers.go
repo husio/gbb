@@ -250,7 +250,7 @@ const commentsPerPage = 50
 
 // TODO: this handler must redirect to the last comment seen by the user, not
 // to the last comment that belongs to the topic
-func LastCommentHandler(
+func LastSeenCommentHandler(
 	store BBStore,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
@@ -271,7 +271,7 @@ func LastCommentHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		// TODO: replace #bottom with #comment-%d
+		// TODO: replace #bottom with #comment-%d depending on user's last seen topic
 		var url string
 		if page := int(topic.CommentsCount / commentsPerPage); page < 2 {
 			url = fmt.Sprintf("/t/%d/%s/#bottom", topic.TopicID, topic.SlugInfo())
@@ -280,6 +280,37 @@ func LastCommentHandler(
 		}
 		http.Redirect(w, r, url, http.StatusSeeOther)
 		return nil
+	}
+}
+
+func GotoCommentHandler(
+	store BBStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+		commentID := surf.PathArgInt64(r, 0)
+
+		topic, comment, position, err := store.CommentByID(ctx, commentID)
+		switch err := castErr(err); err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot fetch comment",
+				"comment", fmt.Sprint(commentID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		var url string
+		if position < commentsPerPage {
+			url = fmt.Sprintf("/t/%d/%s/#comment-%d", topic.TopicID, topic.SlugInfo(), comment.CommentID)
+		} else {
+			page := (position / commentsPerPage) + 1
+			url = fmt.Sprintf("/t/%d/%s/?page=%d#comment-%d", topic.TopicID, topic.SlugInfo(), page+1, comment.CommentID)
+		}
+		return surf.Redirect(url, http.StatusSeeOther)
 	}
 }
 
@@ -564,24 +595,35 @@ func SearchHandler(
 	bbstore BBStore,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
+	const searchResultLimit = 30
+
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
+		query := r.URL.Query()
 
 		content := struct {
 			SearchTerm string
+			NextPage   int64
 			Results    []*SearchResult
+			HasMore    bool
 		}{
-			SearchTerm: strings.TrimSpace(r.URL.Query().Get("q")),
+			SearchTerm: strings.TrimSpace(query.Get("q")),
 		}
 
 		if content.SearchTerm != "" {
-			results, err := bbstore.Search(ctx, content.SearchTerm, 100)
+			page, _ := strconv.ParseInt(query.Get("page"), 10, 32)
+			if page < 1 {
+				page = 1
+			}
+			results, err := bbstore.Search(ctx, content.SearchTerm, searchResultLimit*(page-1), searchResultLimit)
 			if err != nil && err != ErrNotFound {
 				surf.LogError(ctx, err, "database failure, cannot search",
 					"searchTerm", content.SearchTerm)
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 			content.Results = results
+			content.HasMore = len(results) == searchResultLimit // be optimistic
+			content.NextPage = page + 1
 		}
 
 		return rend.Response(ctx, http.StatusOK, "search_result.tmpl", content)

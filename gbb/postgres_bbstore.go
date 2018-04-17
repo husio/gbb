@@ -108,7 +108,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, topicID int64, offset, lim
 	return comments, castErr(rows.Err())
 }
 
-func (s *pgBBStore) Search(ctx context.Context, text string, limit int64) ([]*SearchResult, error) {
+func (s *pgBBStore) Search(ctx context.Context, text string, offset, limit int64) ([]*SearchResult, error) {
 	var results []*SearchResult
 
 	rows, err := s.db.QueryContext(ctx, `
@@ -133,7 +133,8 @@ func (s *pgBBStore) Search(ctx context.Context, text string, limit int64) ([]*Se
 		ORDER BY
 			c.created ASC
 		LIMIT $2
-	`, text, limit)
+		OFFSET $3
+	`, text, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("cannot execute query: %s", err)
 	}
