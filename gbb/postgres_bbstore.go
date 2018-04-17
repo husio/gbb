@@ -39,7 +39,7 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			topics t
 			INNER JOIN users u ON t.author_id = u.user_id
 		WHERE
-			t.created <= $1
+			t.latest_comment <= $1
 		ORDER BY
 			t.latest_comment DESC
 		LIMIT $2

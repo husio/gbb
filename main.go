@@ -70,7 +70,6 @@ func main() {
 		os.Exit(1)
 	}
 	csrf := surf.CsrfMiddleware(csrfStore, renderer)
-
 	if os.Getenv("NO_CSRF") == "yes" {
 		csrf = surf.AsHandler // pass through
 	}

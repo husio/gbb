@@ -129,7 +129,7 @@ func main() {
 				log.Fatal(err)
 			}
 
-			req, err := http.NewRequest("POST", *bbAddrFl+"/t/1/comment/", &b)
+			req, err := http.NewRequest("POST", *bbAddrFl+"/t/3/comment/", &b)
 			if err != nil {
 				log.Fatal(err)
 			}

@@ -103,6 +103,17 @@ func TopicCreateHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
+		if !user.Scopes.Has(adminScope, createTopicScope) {
+			surf.LogInfo(ctx, "user action rejected due to missing topic creation scope",
+				"scopes", user.Scopes.String(),
+				"user", fmt.Sprint(user.UserID))
+			return rend.Response(ctx, http.StatusOK, "error_scope.tmpl", struct {
+				Message string
+			}{
+				Message: "Not allowed to create topic.",
+			})
+		}
+
 		content := Content{
 			CsrfField: surf.CsrfField(ctx),
 		}
@@ -164,6 +175,7 @@ func CommentListHandler(
 		Topic       *Topic
 		Comments    []*Comment
 		Pagination  *paginator
+		CanModify   func(*Comment) bool
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -216,6 +228,15 @@ func CommentListHandler(
 			CsrfField:   surf.CsrfField(ctx),
 			Topic:       topic,
 			Comments:    comments,
+			CanModify: func(comment *Comment) bool {
+				if !user.Authenticated() {
+					return false
+				}
+				if user.UserID == comment.Author.UserID {
+					return true
+				}
+				return user.Scopes.Has(adminScope, moderatorScope)
+			},
 			Pagination: &paginator{
 				total:    topic.CommentsCount,
 				pageSize: commentsPerPage,
@@ -286,6 +307,17 @@ func CommentCreateHandler(
 		default:
 			surf.LogError(ctx, err, "cannot get current user")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		if !user.Scopes.Has(adminScope, createCommentScope) {
+			surf.LogInfo(ctx, "user action rejected due to missing comment creation scope",
+				"scopes", user.Scopes.String(),
+				"user", fmt.Sprint(user.UserID))
+			return rend.Response(ctx, http.StatusOK, "error_scope.tmpl", struct {
+				Message string
+			}{
+				Message: "Not allowed to comment.",
+			})
 		}
 
 		// TODO: validate input
@@ -479,7 +511,8 @@ func RegisterHandler(
 			return rend.Response(ctx, http.StatusBadRequest, "register.tmpl", context)
 		}
 
-		switch user, err := users.Register(ctx, password, User{Name: context.Login}); err {
+		baseScopes := createTopicScope.Add(createCommentScope)
+		switch user, err := users.Register(ctx, password, User{Name: context.Login, Scopes: baseScopes}); err {
 		case nil:
 			surf.LogInfo(ctx, "new user registered",
 				"name", user.Name,
@@ -586,12 +619,16 @@ func CommentEditHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		if comment.Author.UserID != user.UserID {
+		if comment.Author.UserID != user.UserID && !user.Scopes.Has(adminScope, moderatorScope) {
 			surf.LogInfo(ctx, "rejected edit because of permissions",
 				"user", fmt.Sprint(user.UserID),
 				"author", fmt.Sprint(comment.Author.UserID),
 				"comment", fmt.Sprint(comment.CommentID))
-			return surf.StdResponse(ctx, rend, http.StatusForbidden)
+			return rend.Response(ctx, http.StatusOK, "error_scope.tmpl", struct {
+				Message string
+			}{
+				Message: "Not allowed to edit.",
+			})
 		}
 
 		content := struct {
@@ -717,12 +754,16 @@ func CommentDeleteHandler(
 		topic, comment, pos, err := bbstore.CommentByID(ctx, commentID)
 		switch err {
 		case nil:
-			if comment.Author.UserID != user.UserID {
+			if comment.Author.UserID != user.UserID && !user.Scopes.Has(adminScope, moderatorScope) {
 				surf.LogInfo(ctx, "comment deletion forbidden",
 					"comment", fmt.Sprint(commentID),
 					"author", fmt.Sprint(comment.Author.UserID),
 					"user", fmt.Sprint(user.UserID))
-				return surf.StdResponse(ctx, rend, http.StatusForbidden)
+				return rend.Response(ctx, http.StatusOK, "error_scope.tmpl", struct {
+					Message string
+				}{
+					Message: "Not allowed to delete.",
+				})
 			}
 		case ErrNotFound:
 			surf.LogInfo(ctx, "comment not found",

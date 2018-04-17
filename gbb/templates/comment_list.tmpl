@@ -12,6 +12,13 @@
     <a href="/t/">Back to listing</a>
     <span class="separator"></span>
     <a href="#bottom">Bottom of the page</a>
+    <span class="separator"></span>
+    {{if .CurrentUser}}
+      <a href="/logout/">Logout</a>
+      <small>({{.CurrentUser.Name}})</small>
+    {{else}}
+      <a href="/login/">Login</a>
+    {{end}}
   </div>
 
   <h1>{{.Topic.Subject}}</h1>
@@ -24,13 +31,11 @@
           <a href="/u/{{.Author.UserID}}/">{{.Author.Name}}</a>
           at <span title="{{.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Created.Format "Monday, _2 Jan 2006"}}</span>
 
-          {{if $root.CurrentUser.Authenticated}}
-            {{if eq .Author.UserID $root.CurrentUser.UserID}}
-              <span class="separator"></span>
-              <a href="/c/{{.CommentID}}/edit/">edit</a>
-              <span class="separator"></span>
-              <a href="/c/{{.CommentID}}/delete/">delete</a>
-            {{end}}
+          {{if call $root.CanModify .}}
+            <span class="separator"></span>
+            <a href="/c/{{.CommentID}}/edit/">edit</a>
+            <span class="separator"></span>
+            <a href="/c/{{.CommentID}}/delete/">delete</a>
           {{end}}
         </div>
         <div class="comment-content">

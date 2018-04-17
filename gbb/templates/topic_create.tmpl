@@ -1,5 +1,9 @@
 {{template "header.tmpl"}}
 
+<style>
+textarea { min-height: 400px; }
+</style>
+
 <form method="POST" action="." enctype="multipart/form-data" autocomplete="off">
   <fieldset>
     <input type="text" name="subject" value="{{.Subject}}" placeholder="Subject" required>

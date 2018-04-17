@@ -36,6 +36,39 @@ type BBStore interface {
 type User struct {
 	UserID int64
 	Name   string
+	Scopes UserScope
+}
+
+type UserScope uint16
+
+const (
+	adminScope UserScope = 1 << iota
+	moderatorScope
+
+	createTopicScope
+	createCommentScope
+)
+
+func (s UserScope) String() string {
+	return fmt.Sprintf("%b", s)
+}
+
+// Has returns true if scope contains at least one of given scopes
+func (s UserScope) Has(scopes ...UserScope) bool {
+	for _, scope := range scopes {
+		if s&scope != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (s UserScope) Add(scopes UserScope) UserScope {
+	return s | scopes
+}
+
+func (s UserScope) Remove(scopes UserScope) UserScope {
+	return s & ^scopes
 }
 
 func (u *User) Authenticated() bool {

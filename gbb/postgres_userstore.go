@@ -46,11 +46,11 @@ func (s *pgUserStore) Authenticate(ctx context.Context, login, password string) 
 
 	var u User
 	err := s.db.QueryRowContext(ctx, `
-		SELECT user_id, name
+		SELECT user_id, name, scopes
 		FROM users
 		WHERE name = $1
 		LIMIT 1
-	`, login).Scan(&u.UserID, &u.Name)
+	`, login).Scan(&u.UserID, &u.Name, &u.Scopes)
 	return &u, castErr(err)
 }
 
@@ -60,10 +60,10 @@ func (s *pgUserStore) Register(ctx context.Context, password string, u User) (*U
 		return nil, fmt.Errorf("cannot hash password: %s", err)
 	}
 	err = s.db.QueryRowContext(ctx, `
-		INSERT INTO users (password, name)
-		VALUES ($1, $2)
+		INSERT INTO users (password, name, scopes)
+		VALUES ($1, $2, $3)
 		RETURNING user_id
-	`, passhash, u.Name).Scan(&u.UserID)
+	`, passhash, u.Name, u.Scopes).Scan(&u.UserID)
 	if err := castErr(err); err != nil {
 		return nil, err
 	}
@@ -77,11 +77,16 @@ func (s *pgUserStore) UserInfo(ctx context.Context, userID int64) (*UserInfo, er
 	err := s.db.QueryRowContext(ctx, `
 		SELECT
 			u.name,
+			u.scopes,
 			(SELECT COUNT(*) FROM topics t WHERE t.author_id = u.user_id) AS topics_count,
 			(SELECT COUNT(*) FROM comments c WHERE c.author_id = u.user_id) AS comments_count
 		FROM users u
 		WHERE u.user_id = $1
 		LIMIT 1
-	`, userID).Scan(&u.Name, &u.TopicsCount, &u.CommentsCount)
+	`, userID).Scan(
+		&u.Name,
+		&u.Scopes,
+		&u.TopicsCount,
+		&u.CommentsCount)
 	return &u, castErr(err)
 }

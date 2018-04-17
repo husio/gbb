@@ -11,7 +11,8 @@
 
     <span class="separator"></span>
     {{if .CurrentUser}}
-      <a href="/logout/" title="Logged as {{.CurrentUser.Name}}">Logout</a>
+      <a href="/logout/">Logout</a>
+      <small>({{.CurrentUser.Name}})</small>
     {{else}}
       <a href="/login/">Login</a>
     {{end}}
