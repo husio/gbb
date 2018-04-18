@@ -41,9 +41,11 @@ topics (
 	author_id INTEGER NOT NULL REFERENCES users(user_id),
 	views_count INTEGER NOT NULL default 0 CHECK (views_count >= 0),
 	comments_count INTEGER NOT NULL default 1 CHECK (comments_count >= 0),
-	latest_comment TIMESTAMPTZ NOT NULL DEFAULT now()
+	latest_comment TIMESTAMPTZ NOT NULL DEFAULT now(),
+	tags TEXT[] NOT NULL DEFAULT '{}'
 );
 
+ALTER TABLE topics ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 
 CREATE TABLE IF NOT EXISTS
 comments (

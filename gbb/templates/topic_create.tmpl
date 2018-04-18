@@ -6,17 +6,30 @@ textarea { min-height: 400px; }
 
 <form method="POST" action="." enctype="multipart/form-data" autocomplete="off">
   <fieldset>
-    <input type="text" name="subject" value="{{.Subject}}" placeholder="Subject" required>
+    <input type="text" name="subject" value="{{.Input.Subject}}" placeholder="Subject" required>
     {{if .Errors.Subject -}}
-      <div>{{.Errors.Subject}}</div>
+      <div class="box-danger">{{.Errors.Subject}}</div>
     {{- end}}
   </fieldset>
 
   <fieldset>
-    <textarea name="content" placeholder="Content" required>{{.Content}}</textarea>
+    {{range $name, $checked := .Tags}}
+      <label>
+        <input type="checkbox" name="tags" value="{{$name}}" {{if $checked}}checked{{end}}>
+        {{$name}}
+      </label>
+    {{end}}
+
+    {{if .Errors.Tags -}}
+      <div class="box-danger">{{.Errors.Tags}}</div>
+    {{- end}}
+  </fieldset>
+
+  <fieldset>
+    <textarea name="content" placeholder="Content" required>{{.Input.Content}}</textarea>
       Use <a href="https://gist.github.com/budparr/9257428">markdown</a> to format content.
     {{if .Errors.Content -}}
-      <div>{{.Errors.Content}}</div>
+      <div class="box-danger">{{.Errors.Content}}</div>
     {{- end}}
   </fieldset>
 

@@ -42,6 +42,12 @@
             {{.Created | timeago}},
             {{.ViewsCount}} view{{if ne .ViewsCount 1}}s{{end}},
             {{.CommentsCount}} comment{{if ne .CommentsCount 1}}s{{end}}
+            {{- if .Tags -}}
+              ,
+              {{range .Tags}}
+                <span>{{.}}</span>
+              {{end}}
+            {{end}}
           </div>
         </div>
       {{end}}

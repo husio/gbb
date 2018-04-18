@@ -8,6 +8,7 @@ import (
 
 	"github.com/husio/gbb/pkg/surf"
 	"github.com/husio/gbb/pkg/surf/sqldb"
+	"github.com/lib/pq"
 )
 
 func NewPostgresBBStore(db *sql.DB) BBStore {
@@ -33,6 +34,7 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			t.created,
 			t.views_count,
 			t.comments_count,
+			t.tags,
 			t.author_id,
 			u.name
 		FROM
@@ -57,6 +59,7 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			&t.Created,
 			&t.ViewsCount,
 			&t.CommentsCount,
+			pq.Array(&t.Tags),
 			&t.Author.UserID,
 			&t.Author.Name,
 		); err != nil {
@@ -108,7 +111,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, topicID int64, offset, lim
 	return comments, castErr(rows.Err())
 }
 
-func (s *pgBBStore) Search(ctx context.Context, text string, offset, limit int64) ([]*SearchResult, error) {
+func (s *pgBBStore) Search(ctx context.Context, text string, tags []string, offset, limit int64) ([]*SearchResult, error) {
 	var results []*SearchResult
 
 	rows, err := s.db.QueryContext(ctx, `
@@ -119,6 +122,7 @@ func (s *pgBBStore) Search(ctx context.Context, text string, offset, limit int64
 			t.author_id,
 			t.views_count,
 			t.comments_count,
+			t.tags,
 			c.comment_id,
 			c.content,
 			c.created,
@@ -129,12 +133,13 @@ func (s *pgBBStore) Search(ctx context.Context, text string, offset, limit int64
 			INNER JOIN topics t ON c.topic_id = t.topic_id
 			INNER JOIN users u ON c.author_id = u.user_id
 		WHERE
-			c.content ILIKE '%' || $1 || '%'
+			(char_length($1) = 0 OR c.content ILIKE '%' || $1 || '%')
+			AND ($2::TEXT[] IS NULL OR t.tags @> $2)
 		ORDER BY
 			c.created ASC
-		LIMIT $2
-		OFFSET $3
-	`, text, limit, offset)
+		LIMIT $3
+		OFFSET $4
+	`, text, pq.Array(tags), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("cannot execute query: %s", err)
 	}
@@ -148,6 +153,7 @@ func (s *pgBBStore) Search(ctx context.Context, text string, offset, limit int64
 			&r.Topic.Author.UserID,
 			&r.Topic.ViewsCount,
 			&r.Topic.CommentsCount,
+			pq.Array(&r.Topic.Tags),
 			&r.Comment.CommentID,
 			&r.Comment.Content,
 			&r.Comment.Created,
@@ -169,6 +175,7 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 			t.topic_id,
 			t.subject,
 			t.created,
+			t.tags,
 			t.views_count,
 			t.comments_count,
 			u.user_id,
@@ -184,6 +191,7 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 		&t.TopicID,
 		&t.Subject,
 		&t.Created,
+		pq.Array(&t.Tags),
 		&t.ViewsCount,
 		&t.CommentsCount,
 		&t.Author.UserID,
@@ -192,7 +200,7 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 	return &t, castErr(err)
 }
 
-func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, userID int64) (*Topic, *Comment, error) {
+func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, tags []string, userID int64) (*Topic, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Begin("create topic").Finish()
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -216,16 +224,21 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, us
 		return nil, nil, fmt.Errorf("cannot fetch user: %s", err)
 	}
 
+	if tags == nil {
+		// NULL tags are not allowed
+		tags = []string{}
+	}
 	topic := Topic{
 		Subject: subject,
 		Author:  user,
 		Created: time.Now().UTC(),
+		Tags:    tags,
 	}
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO topics (subject, created, author_id, views_count, comments_count)
-		VALUES ($1, $2, $3, 0, 0)
+		INSERT INTO topics (subject, created, author_id, tags, views_count, comments_count)
+		VALUES ($1, $2, $3, $4, 0, 0)
 		RETURNING topic_id
-	`, topic.Subject, topic.Created, user.UserID).Scan(&topic.TopicID)
+	`, topic.Subject, topic.Created, user.UserID, pq.Array(topic.Tags)).Scan(&topic.TopicID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create topic: %s", err)
 	}
@@ -436,6 +449,7 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 			t.topic_id,
 			t.subject,
 			t.created,
+			t.tags,
 			t.views_count,
 			t.comments_count,
 			tu.user_id AS topic_user_id,
@@ -459,6 +473,7 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 		&t.TopicID,
 		&t.Subject,
 		&t.Created,
+		pq.Array(&t.Tags),
 		&t.ViewsCount,
 		&t.CommentsCount,
 		&t.Author.UserID,

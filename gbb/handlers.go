@@ -79,13 +79,18 @@ func TopicListHandler(
 }
 
 func TopicCreateHandler(
+	topicTags []string,
 	store BBStore,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Content struct {
-		Subject   string
-		Content   string
+		Input struct {
+			Subject string
+			Content string
+			Tags    []string
+		}
+		Tags      map[string]bool
 		Errors    map[string]string
 		CsrfField template.HTML
 	}
@@ -115,7 +120,13 @@ func TopicCreateHandler(
 		}
 
 		content := Content{
+			Tags:      make(map[string]bool),
 			CsrfField: surf.CsrfField(ctx),
+		}
+
+		// by default, all tags are not checked
+		for _, t := range topicTags {
+			content.Tags[t] = false
 		}
 
 		if r.Method == "POST" {
@@ -127,25 +138,34 @@ func TopicCreateHandler(
 
 			content.Errors = make(map[string]string)
 
-			content.Subject = strings.TrimSpace(r.Form.Get("subject"))
-			if sLen := len(content.Subject); sLen == 0 {
+			content.Input.Subject = strings.TrimSpace(r.Form.Get("subject"))
+			if sLen := len(content.Input.Subject); sLen == 0 {
 				content.Errors["Subject"] = "Subject is required."
 			} else if sLen < 2 {
 				content.Errors["Subject"] = "Too short. Must be at least 2 characters"
 			}
 
-			content.Content = strings.TrimSpace(r.Form.Get("content"))
-			if cLen := len(content.Content); cLen == 0 {
+			content.Input.Content = strings.TrimSpace(r.Form.Get("content"))
+			if cLen := len(content.Input.Content); cLen == 0 {
 				content.Errors["Content"] = "Content is required."
 			} else if cLen < 2 {
 				content.Errors["Content"] = "Too short. Must be at least 2 characters"
+			}
+
+			content.Input.Tags = r.Form["tags"]
+			for _, t := range content.Input.Tags {
+				if !containsStr(topicTags, t) {
+					content.Errors["Tags"] = "Invalid tag."
+				} else {
+					content.Tags[t] = true
+				}
 			}
 
 			if len(content.Errors) != 0 {
 				return rend.Response(ctx, http.StatusBadRequest, "topic_create.tmpl", content)
 			}
 
-			topic, comment, err := store.CreateTopic(ctx, content.Subject, content.Content, user.UserID)
+			topic, comment, err := store.CreateTopic(ctx, content.Input.Subject, content.Input.Content, content.Input.Tags, user.UserID)
 			if err != nil {
 				surf.LogError(ctx, err, "cannot create posts")
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
@@ -161,6 +181,15 @@ func TopicCreateHandler(
 
 		return rend.Response(ctx, http.StatusOK, "topic_create.tmpl", content)
 	}
+}
+
+func containsStr(collection []string, element string) bool {
+	for _, s := range collection {
+		if s == element {
+			return true
+		}
+	}
+	return false
 }
 
 func CommentListHandler(
@@ -607,7 +636,7 @@ func SearchHandler(
 			Results    []*SearchResult
 			HasMore    bool
 		}{
-			SearchTerm: strings.TrimSpace(query.Get("q")),
+			SearchTerm: query.Get("q"),
 		}
 
 		if content.SearchTerm != "" {
@@ -615,10 +644,20 @@ func SearchHandler(
 			if page < 1 {
 				page = 1
 			}
-			results, err := bbstore.Search(ctx, content.SearchTerm, searchResultLimit*(page-1), searchResultLimit)
+
+			var texts, tags []string
+			for _, f := range strings.Fields(content.SearchTerm) {
+				if strings.HasPrefix(f, "tag:") && len(f) > 4 {
+					tags = append(tags, f[4:])
+				} else {
+					texts = append(texts, f)
+				}
+			}
+
+			results, err := bbstore.Search(ctx, strings.Join(texts, " "), tags, searchResultLimit*(page-1), searchResultLimit)
 			if err != nil && err != ErrNotFound {
 				surf.LogError(ctx, err, "database failure, cannot search",
-					"searchTerm", content.SearchTerm)
+					"q", content.SearchTerm)
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 			content.Results = results

@@ -26,6 +26,11 @@
   </div>
 
   <h1>{{.Topic.Subject}}</h1>
+  <small>
+    {{range .Topic.Tags}}
+      <span>{{.}}</span>
+    {{end}}
+  </small>
 
   {{with $root := .}}
     {{range $root.Comments}}
