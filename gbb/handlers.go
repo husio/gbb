@@ -79,20 +79,19 @@ func TopicListHandler(
 }
 
 func TopicCreateHandler(
-	topicTags []string,
 	store BBStore,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Content struct {
 		Input struct {
-			Subject string
-			Content string
-			Tags    []string
+			Subject  string
+			Content  string
+			Category int64
 		}
-		Tags      map[string]bool
-		Errors    map[string]string
-		CsrfField template.HTML
+		Errors     map[string]string
+		CsrfField  template.HTML
+		Categories []*Category
 	}
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
@@ -119,14 +118,14 @@ func TopicCreateHandler(
 			})
 		}
 
-		content := Content{
-			Tags:      make(map[string]bool),
-			CsrfField: surf.CsrfField(ctx),
+		categories, err := store.ListCategories(ctx)
+		if err != nil {
+			surf.LogError(ctx, err, "cannot list categories")
 		}
 
-		// by default, all tags are not checked
-		for _, t := range topicTags {
-			content.Tags[t] = false
+		content := Content{
+			CsrfField:  surf.CsrfField(ctx),
+			Categories: categories,
 		}
 
 		if r.Method == "POST" {
@@ -152,20 +151,18 @@ func TopicCreateHandler(
 				content.Errors["Content"] = "Too short. Must be at least 2 characters"
 			}
 
-			content.Input.Tags = r.Form["tags"]
-			for _, t := range content.Input.Tags {
-				if !containsStr(topicTags, t) {
-					content.Errors["Tags"] = "Invalid tag."
-				} else {
-					content.Tags[t] = true
-				}
+			content.Input.Category, _ = strconv.ParseInt(r.Form.Get("category"), 10, 64)
+			if content.Input.Category == 0 {
+				content.Errors["Categories"] = "Category is required."
+			} else if !containsCategory(categories, content.Input.Category) {
+				content.Errors["Categories"] = "Invalid value."
 			}
 
 			if len(content.Errors) != 0 {
 				return rend.Response(ctx, http.StatusBadRequest, "topic_create.tmpl", content)
 			}
 
-			topic, comment, err := store.CreateTopic(ctx, content.Input.Subject, content.Input.Content, content.Input.Tags, user.UserID)
+			topic, comment, err := store.CreateTopic(ctx, content.Input.Subject, content.Input.Content, content.Input.Category, user.UserID)
 			if err != nil {
 				surf.LogError(ctx, err, "cannot create posts")
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
@@ -183,9 +180,9 @@ func TopicCreateHandler(
 	}
 }
 
-func containsStr(collection []string, element string) bool {
-	for _, s := range collection {
-		if s == element {
+func containsCategory(categories []*Category, categoryID int64) bool {
+	for _, c := range categories {
+		if c.CategoryID == categoryID {
 			return true
 		}
 	}
@@ -630,13 +627,21 @@ func SearchHandler(
 		ctx := r.Context()
 		query := r.URL.Query()
 
+		categories, err := bbstore.ListCategories(ctx)
+		if err != nil {
+			surf.LogError(ctx, err, "cannot list categories")
+		}
+
 		content := struct {
-			SearchTerm string
-			NextPage   int64
-			Results    []*SearchResult
-			HasMore    bool
+			SearchTerm       string
+			SearchCategories map[int64]bool
+			Categories       []*Category
+			NextPage         int64
+			Results          []*SearchResult
+			HasMore          bool
 		}{
 			SearchTerm: query.Get("q"),
+			Categories: categories,
 		}
 
 		if content.SearchTerm != "" {
@@ -645,16 +650,17 @@ func SearchHandler(
 				page = 1
 			}
 
-			var texts, tags []string
-			for _, f := range strings.Fields(content.SearchTerm) {
-				if strings.HasPrefix(f, "tag:") && len(f) > 4 {
-					tags = append(tags, f[4:])
-				} else {
-					texts = append(texts, f)
+			var categories []int64
+			searchCategories := make(map[int64]bool)
+			for _, raw := range query["c"] {
+				if cid, err := strconv.ParseInt(raw, 10, 64); err == nil {
+					categories = append(categories, cid)
+					searchCategories[cid] = true
 				}
 			}
+			content.SearchCategories = searchCategories
 
-			results, err := bbstore.Search(ctx, strings.Join(texts, " "), tags, searchResultLimit*(page-1), searchResultLimit)
+			results, err := bbstore.Search(ctx, content.SearchTerm, categories, searchResultLimit*(page-1), searchResultLimit)
 			if err != nil && err != ErrNotFound {
 				surf.LogError(ctx, err, "database failure, cannot search",
 					"q", content.SearchTerm)

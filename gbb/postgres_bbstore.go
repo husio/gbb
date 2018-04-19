@@ -21,11 +21,36 @@ type pgBBStore struct {
 	db sqldb.Database
 }
 
-func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {
-	defer surf.CurrentTrace(ctx).Begin("list topics").Finish()
+func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
+	var categories []*Category
+	resp, err := s.db.QueryContext(ctx, `
+		SELECT
+			category_id,
+			name
+		FROM
+			categories
+		LIMIT 1000
+	`)
+	if err != nil {
+		return categories, fmt.Errorf("cannot fetch categories: %s", err)
+	}
+	defer resp.Close()
 
-	surf.LogInfo(ctx, "listing topics",
-		"createdLte", createdLte.String())
+	for resp.Next() {
+		var c Category
+		if err := resp.Scan(
+			&c.CategoryID,
+			&c.Name,
+		); err != nil {
+			return categories, fmt.Errorf("cannot scan row: %s", err)
+		}
+
+		categories = append(categories, &c)
+	}
+	return categories, nil
+}
+
+func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {
 	var topics []*Topic
 	resp, err := s.db.QueryContext(ctx, `
 		SELECT
@@ -34,12 +59,14 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			t.created,
 			t.views_count,
 			t.comments_count,
-			t.tags,
-			t.author_id,
-			u.name
+			u.user_id,
+			u.name,
+			cc.category_id,
+			cc.name
 		FROM
 			topics t
 			INNER JOIN users u ON t.author_id = u.user_id
+			INNER JOIN categories cc ON t.category_id = cc.category_id
 		WHERE
 			t.latest_comment <= $1
 		ORDER BY
@@ -59,9 +86,10 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			&t.Created,
 			&t.ViewsCount,
 			&t.CommentsCount,
-			pq.Array(&t.Tags),
 			&t.Author.UserID,
 			&t.Author.Name,
+			&t.Category.CategoryID,
+			&t.Category.Name,
 		); err != nil {
 			return topics, fmt.Errorf("cannot scan row: %s", err)
 		}
@@ -111,7 +139,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, topicID int64, offset, lim
 	return comments, castErr(rows.Err())
 }
 
-func (s *pgBBStore) Search(ctx context.Context, text string, tags []string, offset, limit int64) ([]*SearchResult, error) {
+func (s *pgBBStore) Search(ctx context.Context, text string, categories []int64, offset, limit int64) ([]*SearchResult, error) {
 	var results []*SearchResult
 
 	rows, err := s.db.QueryContext(ctx, `
@@ -122,24 +150,26 @@ func (s *pgBBStore) Search(ctx context.Context, text string, tags []string, offs
 			t.author_id,
 			t.views_count,
 			t.comments_count,
-			t.tags,
 			c.comment_id,
 			c.content,
 			c.created,
 			c.author_id,
-			u.name
+			u.name,
+			cc.category_id,
+			cc.name
 		FROM
 			comments c
 			INNER JOIN topics t ON c.topic_id = t.topic_id
 			INNER JOIN users u ON c.author_id = u.user_id
+			INNER JOIN categories CC on t.category_id = cc.category_id
 		WHERE
 			(char_length($1) = 0 OR c.content ILIKE '%' || $1 || '%')
-			AND ($2::TEXT[] IS NULL OR t.tags @> $2)
+			AND ($2::INTEGER[] IS NULL OR t.category_id = ANY($2::INTEGER[]))
 		ORDER BY
 			c.created ASC
 		LIMIT $3
 		OFFSET $4
-	`, text, pq.Array(tags), limit, offset)
+	`, text, pq.Array(categories), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("cannot execute query: %s", err)
 	}
@@ -153,12 +183,13 @@ func (s *pgBBStore) Search(ctx context.Context, text string, tags []string, offs
 			&r.Topic.Author.UserID,
 			&r.Topic.ViewsCount,
 			&r.Topic.CommentsCount,
-			pq.Array(&r.Topic.Tags),
 			&r.Comment.CommentID,
 			&r.Comment.Content,
 			&r.Comment.Created,
 			&r.Comment.Author.UserID,
 			&r.Comment.Author.Name,
+			&r.Topic.Category.CategoryID,
+			&r.Topic.Category.Name,
 		); err != nil {
 			return results, fmt.Errorf("cannot scan row: %s", err)
 		}
@@ -175,14 +206,16 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 			t.topic_id,
 			t.subject,
 			t.created,
-			t.tags,
 			t.views_count,
 			t.comments_count,
 			u.user_id,
-			u.name
+			u.name,
+			cc.category_id,
+			cc.name
 		FROM
 			topics t
 			INNER JOIN users u ON t.author_id = u.user_id
+			INNER JOIN categories cc ON t.category_id = cc.category_id
 		WHERE
 			t.topic_id = $1
 		LIMIT 1
@@ -191,16 +224,17 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 		&t.TopicID,
 		&t.Subject,
 		&t.Created,
-		pq.Array(&t.Tags),
 		&t.ViewsCount,
 		&t.CommentsCount,
 		&t.Author.UserID,
 		&t.Author.Name,
+		&t.Category.CategoryID,
+		&t.Category.Name,
 	)
 	return &t, castErr(err)
 }
 
-func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, tags []string, userID int64) (*Topic, *Comment, error) {
+func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, categoryID int64, userID int64) (*Topic, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Begin("create topic").Finish()
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -224,21 +258,19 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ta
 		return nil, nil, fmt.Errorf("cannot fetch user: %s", err)
 	}
 
-	if tags == nil {
-		// NULL tags are not allowed
-		tags = []string{}
-	}
 	topic := Topic{
 		Subject: subject,
 		Author:  user,
 		Created: time.Now().UTC(),
-		Tags:    tags,
+		Category: Category{
+			CategoryID: categoryID,
+		},
 	}
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO topics (subject, created, author_id, tags, views_count, comments_count)
+		INSERT INTO topics (subject, created, author_id, category_id, views_count, comments_count)
 		VALUES ($1, $2, $3, $4, 0, 0)
 		RETURNING topic_id
-	`, topic.Subject, topic.Created, user.UserID, pq.Array(topic.Tags)).Scan(&topic.TopicID)
+	`, topic.Subject, topic.Created, user.UserID, topic.Category.CategoryID).Scan(&topic.TopicID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create topic: %s", err)
 	}
@@ -307,21 +339,6 @@ func (s *pgBBStore) CreateComment(ctx context.Context, topicID int64, content st
 		return nil, ErrNotFound
 	default:
 		return nil, fmt.Errorf("cannot create comment: %s", err)
-	}
-
-	switch result, err := tx.ExecContext(ctx, `
-		UPDATE topics
-		SET
-			comments_count = (SELECT COUNT(*) - 1 FROM comments WHERE topic_id = $1),
-			latest_comment = $2
-		WHERE topic_id = $1
-	`, comment.TopicID, comment.Created); err {
-	case nil:
-		if n, err := result.RowsAffected(); err != nil || n != 1 {
-			return nil, ErrNotFound
-		}
-	default:
-		return nil, fmt.Errorf("cannot update topic counter: %s", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -405,37 +422,16 @@ func (s *pgBBStore) DeleteTopic(ctx context.Context, topicID int64) error {
 }
 
 func (s *pgBBStore) DeleteComment(ctx context.Context, commentID int64) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("cannot start transaction: %s", err)
-	}
-	defer tx.Rollback()
-
-	row := tx.QueryRowContext(ctx, `
-		DELETE FROM comments
-		WHERE comment_id = $1
-		RETURNING topic_id
-	`, commentID)
-	var topicID int64
-	if err := row.Scan(&topicID); err != nil {
-		return castErr(err)
-	}
-
-	res, err := tx.ExecContext(ctx, `
-		UPDATE topics
-		SET comments_count = (SELECT COUNT(*) - 1 FROM comments WHERE topic_id = $1)
-		WHERE topic_id = $1
-	`, topicID)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM comments WHERE comment_id = $1`, commentID)
 	if err != nil {
 		return castErr(err)
-	} else {
-		if n, err := res.RowsAffected(); err != nil {
-			return err
-		} else if n == 0 {
-			return ErrNotFound
-		}
 	}
-	return castErr(tx.Commit())
+	if n, err := res.RowsAffected(); err != nil {
+		return castErr(err)
+	} else if n != 1 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *Comment, int, error) {
@@ -449,7 +445,6 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 			t.topic_id,
 			t.subject,
 			t.created,
-			t.tags,
 			t.views_count,
 			t.comments_count,
 			tu.user_id AS topic_user_id,
@@ -457,6 +452,8 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 			c.comment_id,
 			c.content,
 			c.created,
+			cc.category_id,
+			cc.name,
 			cu.user_id AS comment_user_id,
 			cu.name AS comment_user_name,
 			(SELECT COUNT(*) FROM comments WHERE topic_id = c.topic_id AND created < c.created) AS comment_pos
@@ -465,6 +462,7 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 			INNER JOIN users cu ON c.author_id = cu.user_id
 			INNER JOIN topics t ON t.topic_id = c.topic_id
 			INNER JOIN users tu ON t.author_id = tu.user_id
+			INNER JOIN categories cc ON t.category_id = cc.category_id
 		WHERE
 			c.comment_id = $1
 		LIMIT 1
@@ -473,7 +471,6 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 		&t.TopicID,
 		&t.Subject,
 		&t.Created,
-		pq.Array(&t.Tags),
 		&t.ViewsCount,
 		&t.CommentsCount,
 		&t.Author.UserID,
@@ -481,6 +478,8 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 		&c.CommentID,
 		&c.Content,
 		&c.Created,
+		&t.Category.CategoryID,
+		&t.Category.Name,
 		&c.Author.UserID,
 		&c.Author.Name,
 		&commentPos,

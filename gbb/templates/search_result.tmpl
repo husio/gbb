@@ -17,8 +17,14 @@
   <div class="menu">
     <form action="/t/search/" method="GET" style="display:inline">
       <input type="search" name="q" value="{{.SearchTerm}}" required>
-      <span>
-      </span>
+      {{with $root := .}}
+        {{range $root.Categories}}
+          <label>
+            <input type="checkbox" name="c" value="{{.CategoryID}}" {{if index $root.SearchCategories .CategoryID}}checked{{end}}>
+            {{.Name}}
+          </label>
+        {{end}}
+      {{end}}
       <button>Search</button>
     </form>
   </div>
@@ -36,12 +42,6 @@
           {{.Topic.ViewsCount}} views
           <span class="separator"></span>
           <span title="{{.Comment.Created.Format "2006-01-02 at 15:04 -0700"}}">{{.Comment.Created | timeago }}</span>
-          {{if .Topic.Tags}}
-            <span class="separator"></span>
-            {{range .Topic.Tags}}
-              {{.}}
-            {{end}}
-          {{end}}
         </small>
       </div>
       <div class="comment-content">

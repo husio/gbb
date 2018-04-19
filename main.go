@@ -64,14 +64,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	topicTags := []string{
-		"Discussion",
-		"Installation",
-		"General Programming",
-		"Network Programming",
-		"Site Feedback",
-	}
-
 	csrfStore, err := surf.NewCookieCache("csrf", []byte(secret))
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot create cookie cache")
@@ -87,8 +79,8 @@ func main() {
 	rt.Get(`/`, http.RedirectHandler("/t/", http.StatusTemporaryRedirect))
 	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, authStore, renderer))
 	rt.Get(`/t/search/`, gbb.SearchHandler(bbStore, renderer))
-	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(topicTags, bbStore, authStore, renderer)))
-	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(topicTags, bbStore, authStore, renderer)))
+	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
+	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
 	rt.Get(`/t/<post-id:[^/]+>/last-comment/.*`, gbb.LastSeenCommentHandler(bbStore, authStore, renderer))
 	rt.Get(`/t/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, authStore, renderer)))
 	rt.Post(`/t/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))

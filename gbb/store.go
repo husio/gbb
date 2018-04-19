@@ -18,7 +18,7 @@ type UserStore interface {
 
 type BBStore interface {
 	ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error)
-	CreateTopic(ctx context.Context, subject, content string, tags []string, userID int64) (*Topic, *Comment, error)
+	CreateTopic(ctx context.Context, subject, content string, categoryID int64, userID int64) (*Topic, *Comment, error)
 	TopicByID(ctx context.Context, topicID int64) (*Topic, error)
 	UpdateTopic(ctx context.Context, topicID int64, subject string) error
 	IncrementTopicView(ctx context.Context, postID int64) error
@@ -30,7 +30,14 @@ type BBStore interface {
 	UpdateComment(ctx context.Context, commentID int64, content string) error
 	DeleteComment(ctx context.Context, commentID int64) error
 
-	Search(ctx context.Context, searchText string, searchTags []string, offset, limit int64) ([]*SearchResult, error)
+	Search(ctx context.Context, searchText string, categories []int64, offset, limit int64) ([]*SearchResult, error)
+
+	ListCategories(ctx context.Context) ([]*Category, error)
+}
+
+type Category struct {
+	CategoryID int64
+	Name       string
 }
 
 type User struct {
@@ -82,11 +89,11 @@ type UserInfo struct {
 }
 
 type Topic struct {
-	TopicID int64
-	Subject string
-	Created time.Time
-	Author  User
-	Tags    []string
+	TopicID  int64
+	Subject  string
+	Created  time.Time
+	Author   User
+	Category Category
 
 	CommentsCount int64
 	ViewsCount    int64

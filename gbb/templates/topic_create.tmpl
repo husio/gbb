@@ -13,15 +13,15 @@ textarea { min-height: 400px; }
   </fieldset>
 
   <fieldset>
-    {{range $name, $checked := .Tags}}
+    {{range .Categories}}
       <label>
-        <input type="checkbox" name="tags" value="{{$name}}" {{if $checked}}checked{{end}}>
-        {{$name}}
+        <input type="radio" name="category" value="{{.CategoryID}}" required>
+        {{.Name}}
       </label>
     {{end}}
 
-    {{if .Errors.Tags -}}
-      <div class="box-danger">{{.Errors.Tags}}</div>
+    {{if .Errors.Categories -}}
+      <div class="box-danger">{{.Errors.Categories}}</div>
     {{- end}}
   </fieldset>
 

@@ -28,9 +28,7 @@
 
   <h1>{{.Topic.Subject}}</h1>
   <small>
-    {{range .Topic.Tags}}
-      <span>{{.}}</span>
-    {{end}}
+    In {{.Topic.Category.Name}}
   </small>
 
   {{with $root := .}}
