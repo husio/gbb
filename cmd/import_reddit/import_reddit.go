@@ -86,6 +86,13 @@ func main() {
 					log.Fatal(err)
 				}
 			}
+			if f, err := w.CreateFormField("category"); err != nil {
+				log.Fatal(err)
+			} else {
+				if _, err := io.WriteString(f, "1"); err != nil {
+					log.Fatal(err)
+				}
+			}
 			if f, err := w.CreateFormField("content"); err != nil {
 				log.Fatal(err)
 			} else {

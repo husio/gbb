@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	texttemplate "text/template"
 )
 
@@ -20,6 +21,8 @@ type HTMLRenderer interface {
 	Response(ctx context.Context, statusCode int, templateName string, templateContext interface{}) Response
 }
 
+// StdResponse returns Response instance with generic HTML page for given
+// return code.
 func StdResponse(ctx context.Context, r HTMLRenderer, responseCode int) Response {
 	return r.Response(ctx, responseCode, "stdresponse.tmpl", struct {
 		Code        int
@@ -31,6 +34,7 @@ func StdResponse(ctx context.Context, r HTMLRenderer, responseCode int) Response
 	})
 }
 
+// Redirect returns Response instance that redirects client to another endpoint.
 func Redirect(url string, responseCode int) Response {
 	return &redirectResponse{
 		code: responseCode,
@@ -47,8 +51,17 @@ func (rr *redirectResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, rr.url, rr.code)
 }
 
-func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) HTMLRenderer {
+// NewHTMLRenderer returns HTMLRenderer instance. Default surf template set is
+// extended by templates found in provided path and by passed function mapping.
+//
+// When running in debug mode, templates are always compiled before rendering.
+// In non debug mode, templates are compiled once and reused to achieve better
+// performance.
+// When in debug mode, all template errors are rendered with explanation and
+// additional information, instead of generic error page.
+func NewHTMLRenderer(templatesGlob string, debug bool, funcs template.FuncMap) HTMLRenderer {
 	renderer := &htmlRenderer{
+		debug:         debug,
 		funcs:         funcs,
 		templatesGlob: templatesGlob,
 	}
@@ -56,8 +69,12 @@ func NewHTMLRenderer(templatesGlob string, funcs template.FuncMap) HTMLRenderer 
 }
 
 type htmlRenderer struct {
+	debug         bool
 	funcs         template.FuncMap
 	templatesGlob string
+
+	mu       sync.RWMutex
+	template *template.Template
 }
 
 func (rend *htmlRenderer) Response(ctx context.Context, statusCode int, templateName string, templateContext interface{}) Response {
@@ -65,12 +82,43 @@ func (rend *htmlRenderer) Response(ctx context.Context, statusCode int, template
 		"template", templateName)
 	defer rootSpan.Finish()
 
-	// TODO: cache instead of reading file every time (unless in development mode)
-	compileSpan := rootSpan.Begin("compiling templates")
-	tmpl, err := defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
-	compileSpan.Finish()
-	if err != nil {
-		return rend.renderTemplateParseError(templateName, err)
+	var (
+		err  error
+		tmpl *template.Template
+	)
+	if rend.debug {
+		compileSpan := rootSpan.Begin("compiling templates")
+		tmpl, err = defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
+		compileSpan.Finish()
+		if err != nil {
+			return rend.renderTemplateParseError(templateName, err)
+		}
+	} else {
+		rend.mu.RLock()
+		if rend.template != nil {
+			tmpl = rend.template
+			rend.mu.RUnlock()
+		} else {
+			rend.mu.RUnlock()
+
+			rend.mu.Lock()
+			if rend.template != nil {
+				tmpl = rend.template
+			} else {
+				compileSpan := rootSpan.Begin("compiling templates")
+				tmpl, err = defaultTemplate().Funcs(rend.funcs).ParseGlob(rend.templatesGlob)
+				compileSpan.Finish()
+				if err != nil {
+					LogError(ctx, err, "cannot compile templates",
+						"template", templateName)
+					return &htmlResponse{
+						code: http.StatusInternalServerError,
+						body: strings.NewReader(`<!doctype html>Internal Server Error`),
+					}
+				}
+			}
+			rend.mu.Unlock()
+		}
 	}
 
 	var b bytes.Buffer
@@ -78,10 +126,16 @@ func (rend *htmlRenderer) Response(ctx context.Context, statusCode int, template
 	err = tmpl.ExecuteTemplate(&b, templateName, templateContext)
 	execSpan.Finish()
 	if err != nil {
+		if !rend.debug {
+			LogError(ctx, err, "cannot execute template",
+				"template", templateName)
+			return &htmlResponse{
+				code: http.StatusInternalServerError,
+				body: strings.NewReader(`<!doctype html>Internal Server Error`),
+			}
+		}
 		return rend.renderTemplateExecError(templateName, err)
 	}
-
-	// TODO: support missing template error
 
 	return &htmlResponse{
 		code: statusCode,

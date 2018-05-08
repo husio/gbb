@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/husio/gbb/gbb"
@@ -17,21 +18,21 @@ import (
 func main() {
 	logger := surf.NewLogger(os.Stderr)
 
-	httpPort := os.Getenv("PORT")
-	if httpPort == "" {
-		httpPort = "8000"
+	conf := struct {
+		Debug    bool
+		HttpPort string
+		Secret   string
+		PgConf   string
+		NoCsrf   bool
+	}{
+		Debug:    envBool("DEBUG", false),
+		HttpPort: env("PORT", "8000"),
+		Secret:   env("SECRET", "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas"),
+		PgConf:   env("DATABASE_URL", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`),
+		NoCsrf:   envBool("NO_CSRF", false),
 	}
 
-	secret := os.Getenv("SECRET")
-	if secret == "" {
-		secret = "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas"
-	}
-
-	pgconf := os.Getenv("DATABASE_URL")
-	if pgconf == "" {
-		pgconf = `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`
-	}
-	db, err := sql.Open("postgres", pgconf)
+	db, err := sql.Open("postgres", conf.PgConf)
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot open SQL database")
 		os.Exit(1)
@@ -46,7 +47,7 @@ func main() {
 	bbStore := gbb.NewPostgresBBStore(db)
 	userStore := gbb.NewPostgresUserStore(db)
 
-	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", template.FuncMap{
+	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", conf.Debug, template.FuncMap{
 		"markdown": func(s string) template.HTML {
 			html := github_flavored_markdown.Markdown([]byte(s))
 			return template.HTML(html)
@@ -58,19 +59,19 @@ func main() {
 		},
 	})
 
-	authStore, err := surf.NewCookieCache("auth", []byte(secret))
+	authStore, err := surf.NewCookieCache("auth", []byte(conf.Secret))
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot create cookie cache")
 		os.Exit(1)
 	}
 
-	csrfStore, err := surf.NewCookieCache("csrf", []byte(secret))
+	csrfStore, err := surf.NewCookieCache("csrf", []byte(conf.Secret))
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot create cookie cache")
 		os.Exit(1)
 	}
 	csrf := surf.CsrfMiddleware(csrfStore, renderer)
-	if os.Getenv("NO_CSRF") == "yes" {
+	if conf.NoCsrf {
 		csrf = surf.AsHandler // pass through
 	}
 
@@ -102,7 +103,7 @@ func main() {
 
 	logger.Info(context.Background(), "starting server",
 		"port", "8000")
-	if err := http.ListenAndServe(":"+httpPort, app); err != nil {
+	if err := http.ListenAndServe(":"+conf.HttpPort, app); err != nil {
 		logger.Error(context.Background(), err, "HTTP server failed")
 	}
 }
@@ -126,4 +127,20 @@ func timeago(t time.Time) string {
 		return fmt.Sprintf("%d minutes ago", m)
 	}
 	return "just now"
+}
+
+func env(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func envBool(name string, fallback bool) bool {
+	if v := os.Getenv(name); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return fallback
 }

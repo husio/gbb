@@ -108,10 +108,6 @@ func (s *cookieCache) Get(ctx context.Context, key string, dest interface{}) err
 	return nil
 }
 
-func (s *cookieCache) signature(data []byte) []byte {
-	return []byte("todo")
-}
-
 func (s *cookieCache) Set(ctx context.Context, key string, value interface{}, exp time.Duration) error {
 	defer CurrentTrace(ctx).Begin("cookie cache set",
 		"key", key,

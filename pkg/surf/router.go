@@ -173,7 +173,9 @@ func (rt *router) HandleHTTPRequest(w http.ResponseWriter, r *http.Request) Resp
 
 var pathArgsKey = struct{}{}
 
-// PathArg return value as matched by path regexp at given index.
+// PathArg return value as matched by path regexp at given index. Indexing of
+// matched values starts with 0. If requested argument is out of index, empty
+// string is returned.
 func PathArg(r *http.Request, index int) string {
 	args, ok := r.Context().Value(pathArgsKey).([]string)
 	if !ok {
@@ -185,11 +187,17 @@ func PathArg(r *http.Request, index int) string {
 	return args[index]
 }
 
+// PathArgInt returns integer value of given path argument. If requested path
+// argument is not valid integer value, 0 is returned. Use correct regular
+// expression to ensure represented value is a valid number.
 func PathArgInt(r *http.Request, index int) int {
 	n, _ := strconv.Atoi(PathArg(r, index))
 	return n
 }
 
+// PathArgInt64 returns integer value of given path argument. If requested path
+// argument is not valid integer value, 0 is returned. Use correct regular
+// expression to ensure represented value is a valid number.
 func PathArgInt64(r *http.Request, index int) int64 {
 	n, _ := strconv.ParseInt(PathArg(r, index), 10, 64)
 	return n
