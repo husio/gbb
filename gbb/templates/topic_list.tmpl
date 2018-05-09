@@ -27,6 +27,8 @@
 <style>
 .topic { margin: 8px 0; }
 .topic-tagline { font-size:80%; padding-left: 10px; color: #444; }
+.topic.new-content:before { content: "⚡"; }
+.topic .pagination { font-size: 9px; }
 </style>
 
 <body>
@@ -34,9 +36,20 @@
 
   {{if .Topics}}
       {{range .Topics}}
-        <div class="topic">
-          <a href="/t/{{.TopicID}}/{{.SlugInfo}}/">{{.Subject}}</a>
-          <a href="/t/{{.TopicID}}/last-comment/{{.SlugInfo}}/">↘</a>
+        <div class="topic {{if .NewContent}}new-content{{end}}">
+          <a href="/t/{{.TopicID}}/last-comment/{{.SlugInfo}}/">
+            {{.Subject}}
+          </a>
+
+          {{with $t := .}}
+            {{if gt (len $t.Pages) 1}}
+              <span class="pagination">
+                  {{range $t.Pages}}
+                    <a href="/t/{{$t.TopicID}}/last-comment/{{$t.SlugInfo}}/?page={{.}}">{{.}}</a>
+                  {{end}}
+              </span>
+            {{end}}
+          {{end}}
           <div class="topic-tagline">
             Created by <em>{{.Author.Name}}</em>
             {{.Created | timeago}},

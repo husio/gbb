@@ -35,12 +35,25 @@ func UserDetailsHandler(
 }
 
 func TopicListHandler(
-	store BBStore,
+	bbStore BBStore,
+	readTracker ReadProgressTracker,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 
 	const postsPerPage = 100
+
+	type TrackedTopic struct {
+		*Topic
+		NewContent bool
+		Progress   *ReadProgress
+		Pages      []int
+	}
+
+	lotsOfPages := make([]int, 500)
+	for i := range lotsOfPages {
+		lotsOfPages[i] = i + 1
+	}
 
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
@@ -55,31 +68,59 @@ func TopicListHandler(
 			createdLte = time.Now()
 		}
 
-		posts, err := store.ListTopics(ctx, createdLte, postsPerPage)
+		topics, err := bbStore.ListTopics(ctx, createdLte, postsPerPage)
 		if err != nil {
-			surf.LogError(ctx, err, "cannot fetch posts")
+			surf.LogError(ctx, err, "cannot fetch topics")
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
 		nextPageAfter := ""
-		if len(posts) == postsPerPage {
-			nextPageAfter = posts[len(posts)-1].Created.Format(time.RFC3339)
+		if len(topics) == postsPerPage {
+			nextPageAfter = topics[len(topics)-1].Created.Format(time.RFC3339)
+		}
+
+		trackedTopics := make([]*TrackedTopic, len(topics))
+		for i, t := range topics {
+			trackedTopics[i] = &TrackedTopic{
+				Topic: t,
+				Pages: lotsOfPages[:t.CommentsCount/commentsPerPage],
+			}
+		}
+
+		if user.Authenticated() {
+			topicIDs := make([]int64, len(topics))
+			for i, t := range topics {
+				topicIDs[i] = t.TopicID
+			}
+			if progress, err := readTracker.LastReads(ctx, user.UserID, topicIDs); err != nil {
+				surf.LogError(ctx, err, "cannot get read progress",
+					"user", fmt.Sprint(user.UserID))
+			} else {
+				for _, t := range trackedTopics {
+					t.Progress = progress[t.TopicID]
+					if t.Progress == nil {
+						t.NewContent = true
+					} else {
+						t.NewContent = t.Progress.CommentCreated.Before(t.Updated)
+					}
+				}
+			}
 		}
 
 		return rend.Response(ctx, http.StatusOK, "topic_list.tmpl", struct {
 			CurrentUser   *User
-			Topics        []*Topic
+			Topics        []*TrackedTopic
 			NextPageAfter string
 		}{
 			CurrentUser:   user,
-			Topics:        posts,
+			Topics:        trackedTopics,
 			NextPageAfter: nextPageAfter,
 		})
 	}
 }
 
 func TopicCreateHandler(
-	store BBStore,
+	bbStore BBStore,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
@@ -118,7 +159,7 @@ func TopicCreateHandler(
 			})
 		}
 
-		categories, err := store.ListCategories(ctx)
+		categories, err := bbStore.ListCategories(ctx)
 		if err != nil {
 			surf.LogError(ctx, err, "cannot list categories")
 		}
@@ -162,9 +203,9 @@ func TopicCreateHandler(
 				return rend.Response(ctx, http.StatusBadRequest, "topic_create.tmpl", content)
 			}
 
-			topic, comment, err := store.CreateTopic(ctx, content.Input.Subject, content.Input.Content, content.Input.Category, user.UserID)
+			topic, comment, err := bbStore.CreateTopic(ctx, content.Input.Subject, content.Input.Content, content.Input.Category, user.UserID)
 			if err != nil {
-				surf.LogError(ctx, err, "cannot create posts")
+				surf.LogError(ctx, err, "cannot create topic")
 				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 			}
 
@@ -190,7 +231,8 @@ func containsCategory(categories []*Category, categoryID int64) bool {
 }
 
 func CommentListHandler(
-	store BBStore,
+	bbStore BBStore,
+	readTracker ReadProgressTracker,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
@@ -220,7 +262,7 @@ func CommentListHandler(
 		}
 		offset := (page - 1) * commentsPerPage
 
-		topic, err := store.TopicByID(ctx, topicID)
+		topic, err := bbStore.TopicByID(ctx, topicID)
 		switch err := castErr(err); err {
 		case nil:
 			// all good
@@ -233,7 +275,7 @@ func CommentListHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		comments, err := store.ListComments(ctx, topicID, offset, commentsPerPage)
+		comments, err := bbStore.ListComments(ctx, topicID, offset, commentsPerPage)
 		if err != nil {
 			surf.LogError(ctx, err, "cannot fetch comments",
 				"topicID", fmt.Sprint(topicID))
@@ -244,13 +286,26 @@ func CommentListHandler(
 			"topic.id", fmt.Sprint(topic.TopicID),
 			"topic.subject", topic.Subject)
 
-		// increment can be done in the background
-		go func() {
-			if err := store.IncrementTopicView(ctx, topicID); err != nil {
-				surf.LogError(ctx, err, "cannot increment view counter",
-					"topicID", fmt.Sprint(topic.TopicID))
+		if err := bbStore.IncrementTopicView(ctx, topicID); err != nil {
+			surf.LogError(ctx, err, "cannot increment view counter",
+				"topicID", fmt.Sprint(topic.TopicID))
+		}
+
+		if user.Authenticated() && len(comments) > 0 {
+			lastComment := comments[len(comments)-1]
+			err := readTracker.Track(ctx, ReadProgress{
+				UserID:         user.UserID,
+				TopicID:        topic.TopicID,
+				CommentID:      lastComment.CommentID,
+				CommentCreated: lastComment.Created,
+			})
+			if err != nil {
+				surf.LogError(ctx, err, "cannot track comment",
+					"user", fmt.Sprint(user.UserID),
+					"topic", fmt.Sprint(topic.TopicID),
+					"comment", fmt.Sprint(lastComment.CommentID))
 			}
-		}()
+		}
 
 		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
 			CurrentUser: user,
@@ -277,10 +332,9 @@ func CommentListHandler(
 
 const commentsPerPage = 50
 
-// TODO: this handler must redirect to the last comment seen by the user, not
-// to the last comment that belongs to the topic
 func LastSeenCommentHandler(
-	store BBStore,
+	bbStore BBStore,
+	readTracker ReadProgressTracker,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
@@ -288,7 +342,7 @@ func LastSeenCommentHandler(
 		ctx := r.Context()
 		topicID := surf.PathArgInt64(r, 0)
 
-		topic, err := store.TopicByID(ctx, topicID)
+		topic, err := bbStore.TopicByID(ctx, topicID)
 		switch err := castErr(err); err {
 		case nil:
 			// all good
@@ -300,27 +354,61 @@ func LastSeenCommentHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		// TODO: replace #bottom with #comment-%d depending on user's last seen topic
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil {
+			surf.LogError(ctx, err, "cannot get user information")
+		}
+
+		if user.Authenticated() {
+			if results, err := readTracker.LastReads(ctx, user.UserID, []int64{topic.TopicID}); err != nil {
+				surf.LogError(ctx, err, "cannot get last reads",
+					"topic", fmt.Sprint(topic.TopicID),
+					"user", fmt.Sprint(user.UserID))
+			} else if len(results) == 1 {
+				p := results[topic.TopicID]
+
+				_, _, position, err := bbStore.CommentByID(ctx, p.CommentID)
+				if err != nil {
+					surf.LogError(ctx, err, "cannot fetch comment",
+						"comment", fmt.Sprint(p.CommentID))
+					url := fmt.Sprintf("/t/%d/%s/", topic.TopicID, topic.SlugInfo())
+					return surf.Redirect(url, http.StatusSeeOther)
+				}
+
+				var url string
+				if position < commentsPerPage {
+					url = fmt.Sprintf("/t/%d/%s/#comment-%d", topic.TopicID, topic.SlugInfo(), p.CommentID)
+				} else {
+					page := (position / commentsPerPage) + 1
+					url = fmt.Sprintf("/t/%d/%s/?page=%d#comment-%d", topic.TopicID, topic.SlugInfo(), page+1, p.CommentID)
+				}
+				return surf.Redirect(url, http.StatusSeeOther)
+			} else {
+				// user is looking at the topic for the first time
+				url := fmt.Sprintf("/t/%d/%s/", topic.TopicID, topic.SlugInfo())
+				return surf.Redirect(url, http.StatusSeeOther)
+			}
+		}
+
 		var url string
 		if page := int(topic.CommentsCount / commentsPerPage); page < 2 {
 			url = fmt.Sprintf("/t/%d/%s/#bottom", topic.TopicID, topic.SlugInfo())
 		} else {
 			url = fmt.Sprintf("/t/%d/%s/?page=%d#bottom", topic.TopicID, topic.SlugInfo(), page+1)
 		}
-		http.Redirect(w, r, url, http.StatusSeeOther)
-		return nil
+		return surf.Redirect(url, http.StatusSeeOther)
 	}
 }
 
 func GotoCommentHandler(
-	store BBStore,
+	bbStore BBStore,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		ctx := r.Context()
 		commentID := surf.PathArgInt64(r, 0)
 
-		topic, comment, position, err := store.CommentByID(ctx, commentID)
+		topic, comment, position, err := bbStore.CommentByID(ctx, commentID)
 		switch err := castErr(err); err {
 		case nil:
 			// all good
@@ -344,7 +432,7 @@ func GotoCommentHandler(
 }
 
 func CommentCreateHandler(
-	store BBStore,
+	bbStore BBStore,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
@@ -382,7 +470,7 @@ func CommentCreateHandler(
 
 		// TODO: validate input
 
-		topic, err := store.TopicByID(ctx, topicID)
+		topic, err := bbStore.TopicByID(ctx, topicID)
 		switch err := castErr(err); err {
 		case nil:
 			// all good
@@ -394,7 +482,7 @@ func CommentCreateHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		comment, err := store.CreateComment(ctx, topicID, content, user.UserID)
+		comment, err := bbStore.CreateComment(ctx, topicID, content, user.UserID)
 		switch err {
 		case nil:
 			// all good

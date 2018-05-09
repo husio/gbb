@@ -44,6 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	readTracker := gbb.NewPostgresReadProgressTracker(db)
 	bbStore := gbb.NewPostgresBBStore(db)
 	userStore := gbb.NewPostgresUserStore(db)
 
@@ -78,12 +79,12 @@ func main() {
 	rt := surf.NewRouter()
 
 	rt.Get(`/`, http.RedirectHandler("/t/", http.StatusTemporaryRedirect))
-	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, authStore, renderer))
+	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, readTracker, authStore, renderer))
 	rt.Get(`/t/search/`, gbb.SearchHandler(bbStore, renderer))
 	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
 	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
-	rt.Get(`/t/<post-id:[^/]+>/last-comment/.*`, gbb.LastSeenCommentHandler(bbStore, authStore, renderer))
-	rt.Get(`/t/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, authStore, renderer)))
+	rt.Get(`/t/<post-id:[^/]+>/last-comment/.*`, gbb.LastSeenCommentHandler(bbStore, readTracker, authStore, renderer))
+	rt.Get(`/t/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, readTracker, authStore, renderer)))
 	rt.Post(`/t/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
 	rt.Get(`/c/<comment-id:[^/]+>/edit/`, csrf(gbb.CommentEditHandler(authStore, bbStore, renderer)))
 	rt.Post(`/c/<comment-id:[^/]+>/edit/`, csrf(gbb.CommentEditHandler(authStore, bbStore, renderer)))

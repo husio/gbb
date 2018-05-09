@@ -35,6 +35,18 @@ type BBStore interface {
 	ListCategories(ctx context.Context) ([]*Category, error)
 }
 
+type ReadProgressTracker interface {
+	LastReads(ctx context.Context, userID int64, topicIDs []int64) (map[int64]*ReadProgress, error)
+	Track(context.Context, ReadProgress) error
+}
+
+type ReadProgress struct {
+	UserID         int64
+	TopicID        int64
+	CommentID      int64
+	CommentCreated time.Time
+}
+
 type Category struct {
 	CategoryID int64
 	Name       string
@@ -92,6 +104,7 @@ type Topic struct {
 	TopicID  int64
 	Subject  string
 	Created  time.Time
+	Updated  time.Time
 	Author   User
 	Category Category
 

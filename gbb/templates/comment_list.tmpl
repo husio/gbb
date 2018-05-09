@@ -67,7 +67,7 @@
     Page:
     {{range .Pagination.Pages}}
       {{if .Active}}
-        {{.Number}}
+        <span class="pitem">{{.Number}}</span>
       {{else}}
         <a href="./?page={{.Number}}">{{.Number}}</a>
       {{end}}

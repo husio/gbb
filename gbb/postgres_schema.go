@@ -126,4 +126,18 @@ CREATE TRIGGER update_topic_on_comment_delete
 CREATE INDEX IF NOT EXISTS comments_created_idx ON comments(created);
 
 CREATE INDEX IF NOT EXISTS topics_created_idx ON topics(latest_comment);
+
+
+CREATE TABLE IF NOT EXISTS readprogress (
+	id SERIAL PRIMARY KEY,
+	user_id INTEGER NOT NULL,
+	topic_id INTEGER NOT NULL,
+	comment_id INTEGER NOT NULL,
+	comment_created TIMESTAMPTZ NOT NULL,
+
+	UNIQUE(user_id, topic_id)
+);
+
+CREATE INDEX IF NOT EXISTS readprogress_user_topic_idx  ON readprogress(user_id, topic_id);
+
 `

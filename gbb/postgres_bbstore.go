@@ -59,6 +59,7 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			t.created,
 			t.views_count,
 			t.comments_count,
+			t.latest_comment,
 			u.user_id,
 			u.name,
 			cc.category_id,
@@ -86,6 +87,7 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			&t.Created,
 			&t.ViewsCount,
 			&t.CommentsCount,
+			&t.Updated,
 			&t.Author.UserID,
 			&t.Author.Name,
 			&t.Category.CategoryID,
@@ -150,6 +152,7 @@ func (s *pgBBStore) Search(ctx context.Context, text string, categories []int64,
 			t.author_id,
 			t.views_count,
 			t.comments_count,
+			t.latest_comment,
 			c.comment_id,
 			c.content,
 			c.created,
@@ -183,6 +186,7 @@ func (s *pgBBStore) Search(ctx context.Context, text string, categories []int64,
 			&r.Topic.Author.UserID,
 			&r.Topic.ViewsCount,
 			&r.Topic.CommentsCount,
+			&r.Topic.Updated,
 			&r.Comment.CommentID,
 			&r.Comment.Content,
 			&r.Comment.Created,
@@ -208,6 +212,7 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 			t.created,
 			t.views_count,
 			t.comments_count,
+			t.latest_comment,
 			u.user_id,
 			u.name,
 			cc.category_id,
@@ -226,6 +231,7 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 		&t.Created,
 		&t.ViewsCount,
 		&t.CommentsCount,
+		&t.Updated,
 		&t.Author.UserID,
 		&t.Author.Name,
 		&t.Category.CategoryID,
@@ -258,10 +264,12 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ca
 		return nil, nil, fmt.Errorf("cannot fetch user: %s", err)
 	}
 
+	now := time.Now().UTC()
 	topic := Topic{
 		Subject: subject,
 		Author:  user,
-		Created: time.Now().UTC(),
+		Created: now,
+		Updated: now,
 		Category: Category{
 			CategoryID: categoryID,
 		},
@@ -278,7 +286,7 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ca
 	comment := Comment{
 		TopicID: topic.TopicID,
 		Content: content,
-		Created: topic.Created,
+		Created: now,
 		Author:  user,
 	}
 	err = tx.QueryRowContext(ctx, `
