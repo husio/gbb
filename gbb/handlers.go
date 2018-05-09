@@ -244,10 +244,13 @@ func CommentListHandler(
 			"topic.id", fmt.Sprint(topic.TopicID),
 			"topic.subject", topic.Subject)
 
-		if err := store.IncrementTopicView(ctx, topicID); err != nil {
-			surf.LogError(ctx, err, "cannot increment view counter",
-				"topicID", fmt.Sprint(topic.TopicID))
-		}
+		// increment can be done in the background
+		go func() {
+			if err := store.IncrementTopicView(ctx, topicID); err != nil {
+				surf.LogError(ctx, err, "cannot increment view counter",
+					"topicID", fmt.Sprint(topic.TopicID))
+			}
+		}()
 
 		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
 			CurrentUser: user,

@@ -211,7 +211,7 @@ var tmpl = template.Must(template.New("").Parse(`
   .logentry td { padding: 8px; }
   .logentry.error { background: #FFE8E8; }
 
-  .traces-graph { width: 100%; padding: 2px 140px 8px 0; border: 1px solid #ddd; background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAH0lEQVQYlWN4+PBh2tevXwlihocPH6YxEANGFVJFIQAPZjvIf8HYugAAAABJRU5ErkJggg==); }
+  .traces-graph { width: 100%; overflow: auto; padding: 2px 140px 8px 0; border: 1px solid #ddd; background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAH0lEQVQYlWN4+PBh2tevXwlihocPH6YxEANGFVJFIQAPZjvIf8HYugAAAABJRU5ErkJggg==); }
   .traces-graph .bar { border-bottom: 6px solid #B5D6EB; font-size: 10px; white-space: nowrap; padding: 10px 4px 0 4px; line-height: 12px; }
   .traces-graph .bar:first-child { border-color: #72BBE9; }
 </style>
