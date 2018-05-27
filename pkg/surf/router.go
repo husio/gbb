@@ -21,6 +21,79 @@ func NewRouter() *router {
 	}
 }
 
+type Route interface {
+	Use(middlewares ...Middleware) Route
+
+	Add(method string, handler interface{}) Route
+
+	Get(handler interface{}) Route
+	Post(handler interface{}) Route
+	Put(handler interface{}) Route
+	Delete(handler interface{}) Route
+	Head(handler interface{}) Route
+	Options(handler interface{}) Route
+	Trace(handler interface{}) Route
+	Patch(handler interface{}) Route
+}
+
+func (r *router) R(path string) Route {
+	return &route{
+		router: r,
+		path:   path,
+	}
+}
+
+type route struct {
+	path        string
+	middlewares []Middleware
+	router      *router
+}
+
+func (r *route) Use(middlewares ...Middleware) Route {
+	r.middlewares = append(r.middlewares, middlewares...)
+	return r
+}
+
+func (r *route) Add(method string, handler interface{}) Route {
+	if len(r.middlewares) > 0 {
+		handler = WithMiddlewares(handler, r.middlewares)
+	}
+	r.router.Add(r.path, method, handler)
+	return r
+}
+
+func (r *route) Get(handler interface{}) Route {
+	return r.Add("GET", handler)
+}
+
+func (r *route) Post(handler interface{}) Route {
+	return r.Add("POST", handler)
+}
+
+func (r *route) Put(handler interface{}) Route {
+	return r.Add("PUT", handler)
+}
+
+func (r *route) Delete(handler interface{}) Route {
+	return r.Add("DELETE", handler)
+}
+
+func (r *route) Head(handler interface{}) Route {
+	return r.Add("HEAD", handler)
+}
+
+func (r *route) Trace(handler interface{}) Route {
+	return r.Add("TRACE", handler)
+}
+
+func (r *route) Options(handler interface{}) Route {
+	return r.Add("OPTIONS", handler)
+}
+
+func (r *route) Patch(handler interface{}) Route {
+	return r.Add("PATCH", handler)
+}
+
 // Add registers handler to be called whenever request matching given path
 // regexp and method must be handled.
 //

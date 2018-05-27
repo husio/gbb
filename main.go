@@ -78,27 +78,43 @@ func main() {
 
 	rt := surf.NewRouter()
 
-	rt.Get(`/`, http.RedirectHandler("/t/", http.StatusTemporaryRedirect))
-	rt.Get(`/t/`, gbb.TopicListHandler(bbStore, readTracker, authStore, renderer))
-	rt.Get(`/t/search/`, gbb.SearchHandler(bbStore, renderer))
-	rt.Get(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
-	rt.Post(`/t/new/`, csrf(gbb.TopicCreateHandler(bbStore, authStore, renderer)))
-	rt.Get(`/t/<post-id:[^/]+>/last-comment/.*`, gbb.LastSeenCommentHandler(bbStore, readTracker, authStore, renderer))
-	rt.Get(`/t/<post-id:[^/]+>/.*`, csrf(gbb.CommentListHandler(bbStore, readTracker, authStore, renderer)))
-	rt.Post(`/t/<post-id:[^/]+>/comment/`, csrf(gbb.CommentCreateHandler(bbStore, authStore, renderer)))
-	rt.Get(`/c/<comment-id:[^/]+>/edit/`, csrf(gbb.CommentEditHandler(authStore, bbStore, renderer)))
-	rt.Post(`/c/<comment-id:[^/]+>/edit/`, csrf(gbb.CommentEditHandler(authStore, bbStore, renderer)))
-	rt.Get(`/c/<comment-id:[^/]+>/delete/`, csrf(gbb.CommentDeleteHandler(authStore, bbStore, renderer)))
-	rt.Post(`/c/<comment-id:[^/]+>/delete/`, csrf(gbb.CommentDeleteHandler(authStore, bbStore, renderer)))
-	rt.Get(`/c/<comment-id:[^/]+>/`, gbb.GotoCommentHandler(bbStore, renderer))
-	rt.Get(`/u/<user-id:\d+>/`, gbb.UserDetailsHandler(userStore, authStore, renderer))
-
-	rt.Get(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
-	rt.Post(`/login/`, gbb.LoginHandler(authStore, userStore, renderer))
-	rt.Get(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))
-	rt.Post(`/logout/`, gbb.LogoutHandler(authStore, userStore, renderer))
-	rt.Get(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
-	rt.Post(`/register/`, gbb.RegisterHandler(authStore, userStore, renderer))
+	rt.R(`/`).
+		Get(http.RedirectHandler("/t/", http.StatusTemporaryRedirect))
+	rt.R(`/t/`).
+		Get(gbb.TopicListHandler(bbStore, readTracker, authStore, renderer))
+	rt.R(`/t/search/`).
+		Get(gbb.SearchHandler(bbStore, renderer))
+	rt.R(`/t/new/`).
+		Use(csrf).
+		Get(gbb.TopicCreateHandler(bbStore, authStore, renderer)).
+		Post(gbb.TopicCreateHandler(bbStore, authStore, renderer))
+	rt.R(`/t/<post-id:[^/]+>/last-comment/.*`).
+		Get(gbb.LastSeenCommentHandler(bbStore, readTracker, authStore, renderer))
+	rt.R(`/t/<post-id:[^/]+>/.*`).
+		Use(csrf).
+		Get(gbb.CommentListHandler(bbStore, readTracker, authStore, renderer)).
+		Post(gbb.CommentCreateHandler(bbStore, authStore, renderer))
+	rt.R(`/c/<comment-id:[^/]+>/edit/`).
+		Use(csrf).
+		Get(gbb.CommentEditHandler(authStore, bbStore, renderer)).
+		Post(gbb.CommentEditHandler(authStore, bbStore, renderer))
+	rt.R(`/c/<comment-id:[^/]+>/delete/`).
+		Use(csrf).
+		Get(gbb.CommentDeleteHandler(authStore, bbStore, renderer)).
+		Post(gbb.CommentDeleteHandler(authStore, bbStore, renderer))
+	rt.R(`/c/<comment-id:[^/]+>/`).
+		Get(gbb.GotoCommentHandler(bbStore, renderer))
+	rt.R(`/u/<user-id:\d+>/`).
+		Get(gbb.UserDetailsHandler(userStore, authStore, renderer))
+	rt.R(`/login/`).
+		Get(gbb.LoginHandler(authStore, userStore, renderer)).
+		Post(gbb.LoginHandler(authStore, userStore, renderer))
+	rt.R(`/logout/`).
+		Get(gbb.LogoutHandler(authStore, userStore, renderer)).
+		Post(gbb.LogoutHandler(authStore, userStore, renderer))
+	rt.R(`/register/`).
+		Get(gbb.RegisterHandler(authStore, userStore, renderer)).
+		Post(gbb.RegisterHandler(authStore, userStore, renderer))
 
 	app := surf.NewHTTPApplication(rt, logger, true)
 
