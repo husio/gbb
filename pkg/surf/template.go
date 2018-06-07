@@ -180,7 +180,7 @@ func (rend *htmlRenderer) renderTemplateParseError(templateName string, tmplErr 
 		}
 	}
 
-	codeLines []
+	var codeLines []codeLine
 	if templateFiles, err := filepath.Glob(rend.templatesGlob); err == nil {
 		found := false
 		for _, filename := range templateFiles {
@@ -194,7 +194,7 @@ func (rend *htmlRenderer) renderTemplateParseError(templateName string, tmplErr 
 			if content, err := ioutil.ReadFile(templateFile); err == nil {
 				errLineNo = adjustTemplateTrimming(errLineNo, content) - 1
 
-				codeLines := make([]codeLine, 0, 100)
+				codeLines = make([]codeLine, 0, 100)
 				for i, line := range bytes.Split(content, []byte("\n")) {
 					if i > errLineNo+showCodeSurrounding || i < errLineNo-showCodeSurrounding {
 						continue
