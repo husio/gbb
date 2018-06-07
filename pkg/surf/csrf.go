@@ -44,7 +44,7 @@ func (m *csrfMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Reques
 		return m.reject("cannot get csrf token")
 	}
 
-	if !containsStr(safeCsrfMethods, r.Method) {
+	if !isSafeMethod(r.Method) {
 		// if using https, make sure referer does not come from untrusted source
 		if r.URL.Scheme == "https" {
 			if ref, err := url.Parse(r.Referer()); err != nil {
@@ -114,11 +114,10 @@ func (m *csrfMiddleware) reject(reason string) Response {
 	})
 }
 
-var safeCsrfMethods = []string{"HEAD", "GET", "OPTIONS", "TRACE"}
-
-func containsStr(collection []string, element string) bool {
-	for _, s := range collection {
-		if s == element {
+func isSafeMethod(method string) bool {
+	var safeCsrfMethods = []string{"HEAD", "GET", "OPTIONS", "TRACE"}
+	for _, s := range safeCsrfMethods {
+		if s == method {
 			return true
 		}
 	}

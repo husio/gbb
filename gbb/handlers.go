@@ -566,13 +566,15 @@ func LoginHandler(
 		}
 
 		return rend.Response(ctx, code, "login.tmpl", struct {
-			Errors []string
-			User   *User
-			Next   string
+			Errors    []string
+			User      *User
+			Next      string
+			CsrfField template.HTML
 		}{
-			Errors: errors,
-			User:   user,
-			Next:   r.URL.Query().Get("next"),
+			Errors:    errors,
+			User:      user,
+			Next:      r.URL.Query().Get("next"),
+			CsrfField: surf.CsrfField(ctx),
 		})
 	}
 }
@@ -593,9 +595,11 @@ func LogoutHandler(
 			}
 
 			return rend.Response(ctx, http.StatusOK, "logout.tmpl", struct {
-				User *User
+				User      *User
+				CsrfField template.HTML
 			}{
-				User: user,
+				User:      user,
+				CsrfField: surf.CsrfField(ctx),
 			})
 		}
 
@@ -612,9 +616,10 @@ func RegisterHandler(
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Context struct {
-		Next   string
-		Login  string
-		Errors map[string]string
+		Next      string
+		Login     string
+		CsrfField template.HTML
+		Errors    map[string]string
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -628,13 +633,15 @@ func RegisterHandler(
 
 		if r.Method == "GET" {
 			return rend.Response(ctx, http.StatusOK, "register.tmpl", Context{
-				Next: r.URL.Query().Get("next"),
+				CsrfField: surf.CsrfField(ctx),
+				Next:      r.URL.Query().Get("next"),
 			})
 		}
 
 		context := Context{
-			Next:   r.FormValue("next"),
-			Errors: make(map[string]string),
+			Next:      r.FormValue("next"),
+			CsrfField: surf.CsrfField(ctx),
+			Errors:    make(map[string]string),
 		}
 
 		context.Login = strings.TrimSpace(r.FormValue("login"))

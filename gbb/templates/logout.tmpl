@@ -3,6 +3,7 @@
 
 {{if .User}}
   <form method="POST" action="/logout/">
+    {{.CsrfField}}
     <button>Logout</button>
     or abort and go back to <a href="/t/">topics list</a>.
   </form>

@@ -25,6 +25,7 @@ ul.errors li { list-style-type: none; margin: 10px; }
   <form method="POST" action="/login/" enctype="multipart/form-data">
     <input type="text" name="login" placeholder="Login" required>
     <input type="password" name="password" placeholder="Password" required>
+    {{.CsrfField}}
     <input type="hidden" name="next" value="{{.Next}}">
 
     <button type="submit">Login</button>

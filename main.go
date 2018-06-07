@@ -107,12 +107,15 @@ func main() {
 	rt.R(`/u/<user-id:\d+>/`).
 		Get(gbb.UserDetailsHandler(userStore, authStore, renderer))
 	rt.R(`/login/`).
+		Use(csrf).
 		Get(gbb.LoginHandler(authStore, userStore, renderer)).
 		Post(gbb.LoginHandler(authStore, userStore, renderer))
 	rt.R(`/logout/`).
+		Use(csrf).
 		Get(gbb.LogoutHandler(authStore, userStore, renderer)).
 		Post(gbb.LogoutHandler(authStore, userStore, renderer))
 	rt.R(`/register/`).
+		Use(csrf).
 		Get(gbb.RegisterHandler(authStore, userStore, renderer)).
 		Post(gbb.RegisterHandler(authStore, userStore, renderer))
 
