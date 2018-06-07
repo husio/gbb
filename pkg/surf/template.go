@@ -156,58 +156,60 @@ func (resp *htmlResponse) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rend *htmlRenderer) renderTemplateParseError(templateName string, tmplErr error) Response {
-	templateFile, errLineNo, description := parseTemplateParseError(tmplErr)
-
-	templateFiles, err := filepath.Glob(rend.templatesGlob)
+	templateFile, errLineNo, description, err := parseTemplateParseError(tmplErr)
 	if err != nil {
-		panic(err) // TODO
-	}
-	found := false
-	for _, filename := range templateFiles {
-		if strings.HasSuffix(filename, templateFile) {
-			templateFile = filename
-			found = true
-			break
-		}
-	}
-	if !found {
-		// TODO
-		return &htmlResponse{
-			code: http.StatusInternalServerError,
-			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
-				template not found: %q\n`, templateFile)),
-		}
-	}
-
-	content, err := ioutil.ReadFile(templateFile)
-	if err != nil {
-		// TODO
-		return &htmlResponse{
-			code: http.StatusInternalServerError,
-			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
-				cannot read %q template file: %s\n`, templateFile, err)),
-		}
-	}
-
-	errLineNo = adjustTemplateTrimming(errLineNo, content) - 1
-
-	codeLines := make([]codeLine, 0, 100)
-	for i, line := range bytes.Split(content, []byte("\n")) {
-		if i > errLineNo+showCodeSurrounding || i < errLineNo-showCodeSurrounding {
-			continue
-		}
-		codeLines = append(codeLines, codeLine{
-			Number:    i,
-			Highlight: i == errLineNo,
-			Content:   string(line),
+		// this is failure that happened in debug mode, so it is
+		// acceptable to leak out internal error information
+		stack, _ := stackInformation(1, 8)
+		var body bytes.Buffer
+		err := defaultTemplate().ExecuteTemplate(&body, "surf/panic_error.tmpl", struct {
+			PanicErr  interface{}
+			Stack     []stackLine
+			FullStack string
+		}{
+			PanicErr:  err,
+			Stack:     stack,
+			FullStack: string(debug.Stack()),
 		})
+		if err != nil {
+			panic(err)
+		}
+		return &htmlResponse{
+			code: http.StatusInternalServerError,
+			body: &body,
+		}
 	}
 
-	stack, err := stackInformation(1, 8)
-	if err != nil {
-		panic("cannot read stack information: " + err.Error())
+	codeLines []
+	if templateFiles, err := filepath.Glob(rend.templatesGlob); err == nil {
+		found := false
+		for _, filename := range templateFiles {
+			if strings.HasSuffix(filename, templateFile) {
+				templateFile = filename
+				found = true
+				break
+			}
+		}
+		if found {
+			if content, err := ioutil.ReadFile(templateFile); err == nil {
+				errLineNo = adjustTemplateTrimming(errLineNo, content) - 1
+
+				codeLines := make([]codeLine, 0, 100)
+				for i, line := range bytes.Split(content, []byte("\n")) {
+					if i > errLineNo+showCodeSurrounding || i < errLineNo-showCodeSurrounding {
+						continue
+					}
+					codeLines = append(codeLines, codeLine{
+						Number:    i,
+						Highlight: i == errLineNo,
+						Content:   string(line),
+					})
+				}
+			}
+		}
 	}
 
+	stack, _ := stackInformation(1, 8)
 	var b bytes.Buffer
 	err = defaultTemplate().ExecuteTemplate(&b, "surf/render_error.tmpl", renderErrorContext{
 		Title:           "Cannot Parse Template",
@@ -337,11 +339,7 @@ func adjustTemplateTrimming(lineNo int, templateContent []byte) int {
 }
 
 func (rend *htmlRenderer) renderTemplateExecError(templateName string, tmplErr error) Response {
-	stack, err := stackInformation(1, 8)
-	if err != nil {
-		panic("cannot read stack information: " + err.Error())
-	}
-
+	stack, _ := stackInformation(1, 8)
 	if execErr, ok := tmplErr.(texttemplate.ExecError); ok {
 		templateFile, errLineNo, _, _, description := parseTemplateExecError(execErr.Err)
 
@@ -392,27 +390,23 @@ func (rend *htmlRenderer) renderTemplateExecError(templateName string, tmplErr e
 		}
 	}
 
-	var b bytes.Buffer
-	err = defaultTemplate().ExecuteTemplate(&b, "surf/render_error.tmpl", renderErrorContext{
+	var body bytes.Buffer
+	err := defaultTemplate().ExecuteTemplate(&body, "surf/render_error.tmpl", renderErrorContext{
 		Title:        "Template not found",
 		Description:  "Template not defined or not in search directory.",
 		Stack:        stack,
 		TemplateName: templateName,
 	})
 	if err != nil {
-		return &htmlResponse{
-			code: http.StatusInternalServerError,
-			body: strings.NewReader(fmt.Sprintf(`<!doctype html>
-				cannot render error template: %s`, err)),
-		}
+		panic(err)
 	}
 	return &htmlResponse{
 		code: http.StatusInternalServerError,
-		body: &b,
+		body: &body,
 	}
 }
 
-func parseTemplateParseError(err error) (string, int, string) {
+func parseTemplateParseError(err error) (string, int, string, error) {
 	// error must be in format
 	//   template: <name>:<line>:<whatever...>
 	// for example
@@ -420,12 +414,12 @@ func parseTemplateParseError(err error) (string, int, string) {
 	rx := regexp.MustCompile(`^template: ([^:]+):(\d+):(.*)$`)
 	result := rx.FindStringSubmatch(err.Error())
 	if len(result) != 4 {
-		panic(fmt.Sprintf("cannot parse template error: %q", err))
+		return "", 0, "", fmt.Errorf("cannot parse template error: %q", err)
 	}
 	fileName := string(result[1])
 	lineNo, _ := strconv.ParseInt(string(result[2]), 10, 32)
 	description := string(result[3])
-	return fileName, int(lineNo), description
+	return fileName, int(lineNo), description, nil
 }
 
 func parseTemplateExecError(err error) (string, int, int, string, string) {
@@ -571,6 +565,7 @@ func defaultTemplate() *template.Template {
 	<h1>Application crashed</h1>
 	<p>{{.PanicErr}}</h2>
 
+	{{if .Stack}}
 	<h2>Location</h2>
 	{{range .Stack}}
 		<em>{{.FilePath}}</em>
@@ -579,6 +574,7 @@ func defaultTemplate() *template.Template {
 			<pre><code {{- if .Highlight}} class="highlight"{{end}}><span class="line-number">{{.Number}}</span> {{.Content}}</code></pre>
 		{{end}}
 		</div>
+	{{end}}
 	{{end}}
 
 	<h2>Full stack</h2>

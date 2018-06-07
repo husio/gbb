@@ -59,12 +59,10 @@ func PanicMiddleware(logger Logger) Middleware {
 					panic("cannot read stack information: " + err.Error())
 				}
 				defaultTemplate().ExecuteTemplate(w, "surf/panic_error.tmpl", struct {
-					Request   *http.Request
 					PanicErr  interface{}
 					Stack     []stackLine
 					FullStack string
 				}{
-					Request:   r,
 					PanicErr:  panicErr,
 					Stack:     stack,
 					FullStack: string(debug.Stack()),
