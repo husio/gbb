@@ -45,7 +45,7 @@
             {{if gt (len $t.Pages) 1}}
               <span class="pagination">
                   {{range $t.Pages}}
-                    <a href="/t/{{$t.TopicID}}/last-comment/{{$t.SlugInfo}}/?page={{.}}">{{.}}</a>
+                    <a href="/t/{{$t.TopicID}}/{{$t.SlugInfo}}/?page={{.}}">{{.}}</a>
                   {{end}}
               </span>
             {{end}}
