@@ -50,7 +50,7 @@ func TopicListHandler(
 		Pages      []int
 	}
 
-	lotsOfPages := make([]int, 500)
+	lotsOfPages := make([]int, 75)
 	for i := range lotsOfPages {
 		lotsOfPages[i] = i + 1
 	}
@@ -83,7 +83,7 @@ func TopicListHandler(
 		for i, t := range topics {
 			trackedTopics[i] = &TrackedTopic{
 				Topic: t,
-				Pages: lotsOfPages[:t.CommentsCount/commentsPerPage],
+				Pages: lotsOfPages[:t.CommentsCount/commentsPerPage+1],
 			}
 		}
 
@@ -330,7 +330,7 @@ func CommentListHandler(
 	}
 }
 
-const commentsPerPage = 50
+const commentsPerPage = 100
 
 func LastSeenCommentHandler(
 	bbStore BBStore,
