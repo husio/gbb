@@ -155,14 +155,14 @@ func timeago(t time.Time) string {
 }
 
 func env(name, fallback string) string {
-	if v := os.Getenv(name); v != "" {
+	if v, ok := os.LookupEnv(name); ok {
 		return v
 	}
 	return fallback
 }
 
 func envBool(name string, fallback bool) bool {
-	if v := os.Getenv(name); v != "" {
+	if v, ok := os.LookupEnv(name); ok {
 		if b, err := strconv.ParseBool(v); err == nil {
 			return b
 		}
