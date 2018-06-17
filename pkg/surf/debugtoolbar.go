@@ -74,10 +74,11 @@ func (dt *debugtoolbarMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *ht
 		traceSpans = tr.spans
 	}
 	dt.addReqInfo(debugtoolbarContext{
-		RequestID:  debugID,
-		RequestURL: r.URL,
-		traceSpans: traceSpans,
-		LogEntries: logrec.entries,
+		RequestID:     debugID,
+		RequestURL:    r.URL,
+		RequestMethod: r.Method,
+		traceSpans:    traceSpans,
+		LogEntries:    logrec.entries,
 	})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,11 +121,19 @@ func (dt *debugtoolbarMiddleware) reqInfo(reqID string) (*debugtoolbarContext, b
 
 // debugtoolbarContext contains information about single request.
 type debugtoolbarContext struct {
-	RequestID  string
-	RequestURL *url.URL
+	RequestID     string
+	RequestMethod string
+	RequestURL    *url.URL
 
 	traceSpans []*span
 	LogEntries []*logEntry
+}
+
+func (dc *debugtoolbarContext) Duration() time.Duration {
+	if len(dc.traceSpans) == 0 {
+		return 0
+	}
+	return dc.traceSpans[0].End.Sub(dc.traceSpans[0].Start)
 }
 
 func (dc *debugtoolbarContext) TraceSpans() []*tracespan {
@@ -192,9 +201,24 @@ var tmpl = template.Must(template.New("").Parse(`
 		.mute,
 		.mute a { color: #333; }
 	</style>
-	{{range .}}
-		<p class="{{if not .TraceSpans}}mute{{end}}"><a href="./{{.RequestID}}/">{{.RequestURL}}</a></p>
-	{{end}}
+	<table>
+	<thead>
+		<th>
+			<td>method</td>
+			<td>duration</td>
+			<td>url</td>
+		</th>
+	</thead>
+	<tbody>
+		{{range .}}
+			<tr class="{{if not .TraceSpans}}mute{{end}}">
+				<td>{{.RequestMethod}}</td>
+				<td>{{if eq .Duration 0}}-{{else}}{{.Duration}}{{end}}</td>
+				<td><a href="./{{.RequestID}}/">{{.RequestURL}}</a></td>
+			</tr>
+		{{end}}
+	</tbody>
+	</table>
 {{- end}}
 
 
