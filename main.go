@@ -32,6 +32,8 @@ func main() {
 		NoCsrf:   envBool("NO_CSRF", false),
 	}
 
+	ctx := context.Background()
+
 	db, err := sql.Open("postgres", conf.PgConf)
 	if err != nil {
 		logger.Error(context.Background(), err, "cannot open SQL database")
@@ -39,14 +41,15 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := gbb.EnsureSchema(db); err != nil {
-		logger.Error(context.Background(), err, "cannot ensure store schema")
-		os.Exit(1)
+	readTracker, err := gbb.NewPostgresReadProgressTracker(db)
+	if err != nil {
+		logger.Error(ctx, err, "cannot create read progress tracker")
 	}
 
-	readTracker := gbb.NewPostgresReadProgressTracker(db)
-	bbStore := gbb.NewPostgresBBStore(db)
-	userStore := gbb.NewPostgresUserStore(db)
+	bbStore, err := gbb.NewPostgresBBStore(db)
+	if err != nil {
+		logger.Error(ctx, err, "cannot create bb store")
+	}
 
 	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", conf.Debug, template.FuncMap{
 		"markdown": func(s string) template.HTML {
@@ -84,6 +87,8 @@ func main() {
 		Get(gbb.TopicListHandler(bbStore, readTracker, authStore, renderer))
 	rt.R(`/t/search/`).
 		Get(gbb.SearchHandler(bbStore, renderer))
+	rt.R(`/t/mark-all-read/`).
+		Get(gbb.MarkAllReadHandler(authStore, readTracker))
 	rt.R(`/t/new/`).
 		Use(csrf).
 		Get(gbb.TopicCreateHandler(bbStore, authStore, renderer)).
@@ -105,19 +110,19 @@ func main() {
 	rt.R(`/c/<comment-id:[^/]+>/`).
 		Get(gbb.GotoCommentHandler(bbStore, renderer))
 	rt.R(`/u/<user-id:\d+>/`).
-		Get(gbb.UserDetailsHandler(userStore, authStore, renderer))
+		Get(gbb.UserDetailsHandler(bbStore, authStore, renderer))
 	rt.R(`/login/`).
 		Use(csrf).
-		Get(gbb.LoginHandler(authStore, userStore, renderer)).
-		Post(gbb.LoginHandler(authStore, userStore, renderer))
+		Get(gbb.LoginHandler(authStore, bbStore, renderer)).
+		Post(gbb.LoginHandler(authStore, bbStore, renderer))
 	rt.R(`/logout/`).
 		Use(csrf).
-		Get(gbb.LogoutHandler(authStore, userStore, renderer)).
-		Post(gbb.LogoutHandler(authStore, userStore, renderer))
+		Get(gbb.LogoutHandler(authStore, bbStore, renderer)).
+		Post(gbb.LogoutHandler(authStore, bbStore, renderer))
 	rt.R(`/register/`).
 		Use(csrf).
-		Get(gbb.RegisterHandler(authStore, userStore, renderer)).
-		Post(gbb.RegisterHandler(authStore, userStore, renderer))
+		Get(gbb.RegisterHandler(authStore, bbStore, renderer)).
+		Post(gbb.RegisterHandler(authStore, bbStore, renderer))
 
 	app := surf.NewHTTPApplication(rt, logger, true)
 

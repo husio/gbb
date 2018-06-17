@@ -16,7 +16,10 @@ func TestListTopicsEmpty(t *testing.T) {
 	db := createDatabase(t)
 	defer db.Close()
 
-	store := NewPostgresBBStore(db)
+	store, err := NewPostgresBBStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.ListTopics(ctx, time.Now(), 100); err != nil {
 		t.Fatalf("cannot list posts: %s", err)
 	}
@@ -31,7 +34,10 @@ func TestCreateTopic(t *testing.T) {
 
 	ensureUser(t, db, 999, "Bobby")
 
-	store := NewPostgresBBStore(db)
+	store, err := NewPostgresBBStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	topic, comment, err := store.CreateTopic(ctx, "first", "IMO", 999)
 	if err != nil {
 		t.Fatalf("cannot create topic: %s", err)
@@ -63,7 +69,10 @@ func TestCreateComment(t *testing.T) {
 
 	ensureUser(t, db, 999, "Bobby")
 
-	store := NewPostgresBBStore(db)
+	store, err := NewPostgresBBStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	topic, _, err := store.CreateTopic(ctx, "first", "IMO", 999)
 	if err != nil {
 		t.Fatalf("cannot create topic: %s", err)
@@ -94,7 +103,10 @@ func TestCreateCommentTopicNotFound(t *testing.T) {
 
 	ensureUser(t, db, 999, "Bobby")
 
-	store := NewPostgresBBStore(db)
+	store, err := NewPostgresBBStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if c, err := store.CreateComment(ctx, 1244141412, "IMO", 999); err != ErrNotFound {
 		t.Fatalf("want ErrNotFound, got %q and %+v", err, c)
 	}
@@ -138,10 +150,6 @@ func createDatabase(t *testing.T) *sql.DB {
 	}
 
 	t.Logf("test database created: %s", testdbConf.DBName)
-
-	if err := EnsureSchema(testdb); err != nil {
-		t.Fatalf("cannot ensure schema: %s", err)
-	}
 
 	return testdb
 }

@@ -9,6 +9,11 @@
       <a href="./?after={{.NextPageAfter}}">Next Page</a>
     {{end}}
 
+    {{if .CurrentUser}}
+      <span class="separator"></span>
+      <a href="/t/mark-all-read/">Mark all read</a>
+    {{end}}
+
     <span class="separator"></span>
     {{if .CurrentUser}}
       <a href="/logout/">Logout</a>

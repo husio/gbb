@@ -4,17 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/husio/gbb/pkg/surf"
 	"github.com/husio/gbb/pkg/surf/sqldb"
 	"github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
-func NewPostgresBBStore(db *sql.DB) BBStore {
-	return &pgBBStore{
+func NewPostgresBBStore(db *sql.DB) (BBStore, error) {
+	store := &pgBBStore{
 		db: sqldb.PostgresDatabase(db),
 	}
+	return store, store.ensureSchema(context.Background())
 }
 
 type pgBBStore struct {
@@ -493,4 +496,196 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 		&commentPos,
 	)
 	return &t, &c, commentPos, castErr(err)
+}
+
+func (s *pgBBStore) AuthenticateUser(ctx context.Context, login, password string) (*User, error) {
+	var passhash string
+	switch err := s.db.QueryRowContext(ctx, `
+		SELECT password
+		FROM users
+		WHERE name = $1
+		LIMIT 1
+	`, login).Scan(&passhash); err {
+	case nil:
+		// all good
+	case sqldb.ErrNotFound:
+		return nil, ErrNotFound
+	default:
+		return nil, fmt.Errorf("database: %s", err)
+	}
+
+	switch err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(password)); err {
+	case nil:
+		// all good
+	case bcrypt.ErrMismatchedHashAndPassword:
+		return nil, ErrNotFound
+	default:
+		return nil, fmt.Errorf("bcrypt: %s", err)
+	}
+
+	var u User
+	err := s.db.QueryRowContext(ctx, `
+		SELECT user_id, name, scopes
+		FROM users
+		WHERE name = $1
+		LIMIT 1
+	`, login).Scan(&u.UserID, &u.Name, &u.Scopes)
+	return &u, castErr(err)
+}
+
+func (s *pgBBStore) RegisterUser(ctx context.Context, password string, u User) (*User, error) {
+	passhash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("cannot hash password: %s", err)
+	}
+	err = s.db.QueryRowContext(ctx, `
+		INSERT INTO users (password, name, scopes)
+		VALUES ($1, $2, $3)
+		RETURNING user_id
+	`, passhash, u.Name, u.Scopes).Scan(&u.UserID)
+	if err := castErr(err); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (s *pgBBStore) UserInfo(ctx context.Context, userID int64) (*UserInfo, error) {
+	u := UserInfo{
+		User: User{UserID: userID},
+	}
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			u.name,
+			u.scopes,
+			(SELECT COUNT(*) FROM topics t WHERE t.author_id = u.user_id) AS topics_count,
+			(SELECT COUNT(*) FROM comments c WHERE c.author_id = u.user_id) AS comments_count
+		FROM users u
+		WHERE u.user_id = $1
+		LIMIT 1
+	`, userID).Scan(
+		&u.Name,
+		&u.Scopes,
+		&u.TopicsCount,
+		&u.CommentsCount)
+	return &u, castErr(err)
+}
+
+func (s *pgBBStore) ensureSchema(ctx context.Context) error {
+	const schema = `
+CREATE TABLE IF NOT EXISTS
+users (
+	user_id SERIAL PRIMARY KEY,
+	password TEXT NOT NULL,
+	name TEXT NOT NULL,
+	scopes SMALLINT NOT NULL DEFAULT 0
+);
+
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS scopes SMALLINT NOT NULL DEFAULT 0;
+
+
+CREATE TABLE IF NOT EXISTS
+categories (
+	category_id SERIAL PRIMARY KEY,
+	name TEXT NOT NULL
+);
+
+
+INSERT INTO categories VALUES (1, 'General discussion')
+	ON CONFLICT DO NOTHING;
+
+
+CREATE TABLE IF NOT EXISTS
+topics (
+	topic_id SERIAL PRIMARY KEY,
+	subject TEXT NOT NULL,
+	created TIMESTAMPTZ NOT NULL,
+	author_id INTEGER NOT NULL REFERENCES users(user_id),
+	views_count INTEGER NOT NULL default 0 CHECK (views_count >= 0),
+	comments_count INTEGER NOT NULL default 1 CHECK (comments_count >= 0),
+	latest_comment TIMESTAMPTZ NOT NULL DEFAULT now(),
+	category_id INTEGER NOT NULL REFERENCES categories(category_id)
+);
+
+ALTER TABLE topics ADD COLUMN IF NOT EXISTS
+	category_id INTEGER NOT NULL DEFAULT 1;
+
+
+ALTER TABLE topics DROP CONSTRAINT IF EXISTS fk_topics_category_id,
+	ADD CONSTRAINT fk_topics_category_id FOREIGN KEY (category_id) REFERENCES categories(category_id);
+
+
+ALTER TABLE topics DROP COLUMN IF EXISTS tags;
+
+
+CREATE TABLE IF NOT EXISTS
+comments (
+	comment_id SERIAL PRIMARY KEY,
+	topic_id INTEGER NOT NULL REFERENCES topics(topic_id),
+	content TEXT NOT NULL,
+	created TIMESTAMPTZ NOT NULL,
+	author_id INTEGER NOT NULL REFERENCES users(user_id)
+);
+
+
+CREATE OR REPLACE FUNCTION update_topic_on_comment_insert()
+RETURNS trigger AS $$
+BEGIN
+	UPDATE topics SET
+		latest_comment = (SELECT created FROM comments WHERE topic_id = NEW.topic_id ORDER BY created DESC LIMIT 1),
+		comments_count = (SELECT COUNT(*) - 1 FROM comments WHERE topic_id = NEW.topic_id)
+		WHERE topic_id = NEW.topic_id;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+DROP TRIGGER IF EXISTS update_topic_on_comment_insert ON comments;
+
+
+CREATE OR REPLACE FUNCTION update_topic_on_comment_delete()
+RETURNS trigger AS $$
+DECLARE
+	comments_cnt INT;
+BEGIN
+	comments_cnt := (SELECT COUNT(*) - 1 FROM comments WHERE topic_id = OLD.topic_id);
+	IF comments_cnt < 0 THEN
+		comments_cnt = 0;
+	END IF;
+	UPDATE topics SET
+		latest_comment = COALESCE((SELECT created FROM comments WHERE topic_id = OLD.topic_id ORDER BY created DESC LIMIT 1), now()),
+		comments_count = comments_cnt
+		WHERE topic_id = OLD.topic_id;
+	RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+
+DROP TRIGGER IF EXISTS update_topic_on_comment_delete ON comments;
+
+
+CREATE TRIGGER update_topic_on_comment_insert
+    AFTER INSERT ON comments
+    FOR EACH ROW EXECUTE PROCEDURE update_topic_on_comment_insert();
+
+
+CREATE TRIGGER update_topic_on_comment_delete
+    AFTER DELETE ON comments
+    FOR EACH ROW EXECUTE PROCEDURE update_topic_on_comment_delete();
+
+
+CREATE INDEX IF NOT EXISTS comments_created_idx ON comments(created);
+
+CREATE INDEX IF NOT EXISTS topics_created_idx ON topics(latest_comment);
+`
+	for i, migration := range strings.Split(schema, `;\n\n`) {
+		_, err := s.db.ExecContext(ctx, migration)
+		if err != nil {
+			if max := 30; len(migration) > max {
+				migration = migration[max:]
+			}
+			return fmt.Errorf("migration %d (%s): %s", i, migration, err)
+		}
+	}
+	return nil
 }

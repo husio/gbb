@@ -13,7 +13,7 @@ import (
 )
 
 func UserDetailsHandler(
-	users UserStore,
+	bbStore BBStore,
 	authStore surf.UnboundCacheService,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
@@ -21,7 +21,7 @@ func UserDetailsHandler(
 		userID := surf.PathArgInt64(r, 0)
 
 		ctx := r.Context()
-		switch user, err := users.UserInfo(ctx, userID); err {
+		switch user, err := bbStore.UserInfo(ctx, userID); err {
 		case nil:
 			return rend.Response(ctx, http.StatusOK, "user_details.tmpl", user)
 		case ErrNotFound:
@@ -515,7 +515,7 @@ func CommentCreateHandler(
 
 func LoginHandler(
 	authStore surf.UnboundCacheService,
-	users UserStore,
+	bbStore BBStore,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -529,7 +529,7 @@ func LoginHandler(
 			login := r.FormValue("login")
 			passwd := r.FormValue("password")
 
-			switch user, err := users.Authenticate(ctx, login, passwd); err {
+			switch user, err := bbStore.AuthenticateUser(ctx, login, passwd); err {
 			case nil:
 				if err := Login(ctx, boundCache, *user); err != nil {
 					surf.LogError(ctx, err, "cannot login user",
@@ -581,7 +581,7 @@ func LoginHandler(
 
 func LogoutHandler(
 	authStore surf.UnboundCacheService,
-	users UserStore,
+	bbStore BBStore,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
@@ -612,7 +612,7 @@ func LogoutHandler(
 
 func RegisterHandler(
 	authStore surf.UnboundCacheService,
-	users UserStore,
+	bbStore BBStore,
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	type Context struct {
@@ -667,7 +667,7 @@ func RegisterHandler(
 		}
 
 		baseScopes := createTopicScope.Add(createCommentScope)
-		switch user, err := users.Register(ctx, password, User{Name: context.Login, Scopes: baseScopes}); err {
+		switch user, err := bbStore.RegisterUser(ctx, password, User{Name: context.Login, Scopes: baseScopes}); err {
 		case nil:
 			surf.LogInfo(ctx, "new user registered",
 				"name", user.Name,
@@ -1005,5 +1005,27 @@ func CommentDeleteHandler(
 		}
 		return surf.Redirect(fmt.Sprintf("/t/%d/%s/", topic.TopicID, topic.SlugInfo()), http.StatusSeeOther)
 
+	}
+}
+
+func MarkAllReadHandler(
+	authStore surf.UnboundCacheService,
+	readTracker ReadProgressTracker,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil {
+			return surf.Redirect("/t/", http.StatusSeeOther)
+		}
+
+		if err := readTracker.MarkAllRead(ctx, user.UserID, time.Now()); err != nil {
+			surf.LogError(ctx, err, "cannot mark all topics as read",
+				"user.id", fmt.Sprint(user.UserID),
+				"user.name", user.Name)
+		}
+
+		return surf.Redirect("/t/", http.StatusSeeOther)
 	}
 }

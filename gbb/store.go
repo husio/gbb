@@ -10,12 +10,6 @@ import (
 	"github.com/husio/gbb/pkg/surf/sqldb"
 )
 
-type UserStore interface {
-	Register(ctx context.Context, password string, u User) (*User, error)
-	Authenticate(ctx context.Context, login, password string) (*User, error)
-	UserInfo(ctx context.Context, userID int64) (*UserInfo, error)
-}
-
 type BBStore interface {
 	ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error)
 	CreateTopic(ctx context.Context, subject, content string, categoryID int64, userID int64) (*Topic, *Comment, error)
@@ -33,11 +27,16 @@ type BBStore interface {
 	Search(ctx context.Context, searchText string, categories []int64, offset, limit int64) ([]*SearchResult, error)
 
 	ListCategories(ctx context.Context) ([]*Category, error)
+
+	RegisterUser(ctx context.Context, password string, u User) (*User, error)
+	AuthenticateUser(ctx context.Context, login, password string) (*User, error)
+	UserInfo(ctx context.Context, userID int64) (*UserInfo, error)
 }
 
 type ReadProgressTracker interface {
 	LastReads(ctx context.Context, userID int64, topicIDs []int64) (map[int64]*ReadProgress, error)
 	Track(context.Context, ReadProgress) error
+	MarkAllRead(ctx context.Context, userID int64, now time.Time) error
 }
 
 type ReadProgress struct {
