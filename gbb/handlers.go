@@ -355,7 +355,7 @@ func LastSeenCommentHandler(
 		}
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		if err != nil {
+		if err != nil && err != ErrUnauthenticated {
 			surf.LogError(ctx, err, "cannot get user information")
 		}
 
