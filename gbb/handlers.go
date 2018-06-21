@@ -332,6 +332,38 @@ func CommentListHandler(
 
 const commentsPerPage = 100
 
+func LastCommentHandler(
+	bbStore BBStore,
+	readTracker ReadProgressTracker,
+	authStore surf.UnboundCacheService,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+		topicID := surf.PathArgInt64(r, 0)
+
+		topic, err := bbStore.TopicByID(ctx, topicID)
+		switch err := castErr(err); err {
+		case nil:
+			// all good
+		case ErrNotFound:
+			return surf.StdResponse(ctx, rend, http.StatusNotFound)
+		default:
+			surf.LogError(ctx, err, "cannot fetch topic",
+				"topic", fmt.Sprint(topicID))
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		var url string
+		if page := int(topic.CommentsCount / commentsPerPage); page < 2 {
+			url = fmt.Sprintf("/t/%d/%s/#bottom", topic.TopicID, topic.SlugInfo())
+		} else {
+			url = fmt.Sprintf("/t/%d/%s/?page=%d#bottom", topic.TopicID, topic.SlugInfo(), page+1)
+		}
+		return surf.Redirect(url, http.StatusSeeOther)
+	}
+}
+
 func LastSeenCommentHandler(
 	bbStore BBStore,
 	readTracker ReadProgressTracker,

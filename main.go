@@ -93,8 +93,10 @@ func main() {
 		Use(csrf).
 		Get(gbb.TopicCreateHandler(bbStore, authStore, renderer)).
 		Post(gbb.TopicCreateHandler(bbStore, authStore, renderer))
-	rt.R(`/t/<post-id:[^/]+>/last-comment/.*`).
+	rt.R(`/t/<post-id:[^/]+>/last-seen-comment/.*`).
 		Get(gbb.LastSeenCommentHandler(bbStore, readTracker, authStore, renderer))
+	rt.R(`/t/<post-id:[^/]+>/last-comment/.*`).
+		Get(gbb.LastCommentHandler(bbStore, readTracker, authStore, renderer))
 	rt.R(`/t/<post-id:[^/]+>/.*`).
 		Use(csrf).
 		Get(gbb.CommentListHandler(bbStore, readTracker, authStore, renderer)).
