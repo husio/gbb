@@ -1,5 +1,13 @@
 {{template "header.tmpl"}}
 
+<div class="menu">
+  <a href="/t/">Topic List</a>
+  <span class="separator"></span>
+  <a href="/t/search/">Search</a>
+  <span class="separator"></span>
+  <a href="/login/">Login</a>
+</div>
+
 <form method="POST" action="." enctype="multipart/form-data">
   <input type="text" name="login" value="{{.Login}}" placeholder="Login" required>
   {{if .Errors.Login -}}
