@@ -14,16 +14,18 @@ import (
 func DebugToolbarMiddleware(rootPath string) Middleware {
 	return func(handler interface{}) Handler {
 		return &debugtoolbarMiddleware{
-			handler:  AsHandler(handler),
-			rootPath: rootPath,
-			history:  list.New(),
+			handler:     AsHandler(handler),
+			rootPath:    rootPath,
+			history:     list.New(),
+			historySize: 500,
 		}
 	}
 }
 
 type debugtoolbarMiddleware struct {
-	handler  Handler
-	rootPath string
+	handler     Handler
+	rootPath    string
+	historySize int
 
 	mu      sync.Mutex
 	history *list.List
@@ -73,13 +75,14 @@ func (dt *debugtoolbarMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *ht
 	if tr, ok := ctx.Value("surf:trace").(*trace); ok {
 		traceSpans = tr.spans
 	}
-	dt.addReqInfo(debugtoolbarContext{
+	dtCtx := debugtoolbarContext{
 		RequestID:     debugID,
 		RequestURL:    r.URL,
 		RequestMethod: r.Method,
 		traceSpans:    traceSpans,
 		LogEntries:    logrec.entries,
-	})
+	}
+	dt.addReqInfo(dtCtx)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if response != nil {
@@ -101,7 +104,7 @@ func (dt *debugtoolbarMiddleware) addReqInfo(c debugtoolbarContext) {
 
 	dt.history.PushFront(&c)
 
-	for dt.history.Len() > 25 {
+	for dt.history.Len() > dt.historySize {
 		dt.history.Remove(dt.history.Back())
 	}
 }
@@ -230,9 +233,8 @@ var tmpl = template.Must(template.New("").Parse(`
   * { box-sizing: border-box;  }
 
   table { width: 100%; border-spacing: 0; }
-  table td { padding: 2px 4px; }
+  table td { padding: 1px 4px; }
 
-  .logentry td { padding: 8px; }
   .logentry.error { background: #FFE8E8; }
 
   .traces-graph { width: 100%; overflow: auto; padding: 2px 140px 8px 0; border: 1px solid #ddd; background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAH0lEQVQYlWN4+PBh2tevXwlihocPH6YxEANGFVJFIQAPZjvIf8HYugAAAABJRU5ErkJggg==); }
@@ -244,6 +246,9 @@ var tmpl = template.Must(template.New("").Parse(`
   <h1>{{.RequestURL}}</h1>
   <p>
     Request ID: <code>{{.RequestID}}</code>
+  </p>
+  <p>
+    Duration: <code>{{.Duration}}</code>
   </p>
   <p><a href="../">All recent traces</a></p>
 

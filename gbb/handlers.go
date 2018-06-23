@@ -255,6 +255,8 @@ func CommentListHandler(
 		if err != nil && err != ErrUnauthenticated {
 			surf.LogError(ctx, err, "cannot authenticated user")
 		}
+		surf.LogInfo(ctx, "current user fetched",
+			"user", fmt.Sprint(user))
 
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		if page < 1 {
@@ -306,6 +308,8 @@ func CommentListHandler(
 					"comment", fmt.Sprint(lastComment.CommentID))
 			}
 		}
+
+		surf.LogInfo(ctx, "template context prepared")
 
 		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
 			CurrentUser: user,
