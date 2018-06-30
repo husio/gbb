@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"time"
 
 	"github.com/husio/gbb/gbb"
@@ -189,20 +188,4 @@ func timeago(t time.Time) string {
 		return fmt.Sprintf("%d minutes ago", m)
 	}
 	return "just now"
-}
-
-func env(name, fallback string) string {
-	if v, ok := os.LookupEnv(name); ok {
-		return v
-	}
-	return fallback
-}
-
-func envBool(name string, fallback bool) bool {
-	if v, ok := os.LookupEnv(name); ok {
-		if b, err := strconv.ParseBool(v); err == nil {
-			return b
-		}
-	}
-	return fallback
 }
