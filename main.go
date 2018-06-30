@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"time"
 
@@ -16,39 +17,63 @@ import (
 )
 
 func main() {
-	logger := surf.NewLogger(os.Stderr)
-
-	conf := struct {
-		Debug    bool
-		HttpPort string
-		Secret   string
-		PgConf   string
-		NoCsrf   bool
-	}{
-		Debug:    envBool("DEBUG", false),
-		HttpPort: env("PORT", "8000"),
-		Secret:   env("SECRET", "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas"),
-		PgConf:   env("DATABASE_URL", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`),
-		NoCsrf:   envBool("NO_CSRF", false),
+	env := surf.NewEnvConf()
+	conf := configuration{
+		Debug:       env.Bool("DEBUG", false, "Provide additional debug information."),
+		HttpPort:    env.Str("HTTP_PORT", "8000", "HTTP server port."),
+		Secret:      env.Secret("SECRET", "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas", "Secret used for security"),
+		DatabaseUrl: env.Secret("DATABASE_URL", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`, "Database connection details."),
+		NoCsrf:      env.Bool("NO_CSRF", false, "Do not requir CSRF token. This should be used only during local development."),
 	}
 
-	ctx := context.Background()
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "-h", "--help", "help":
+			env.PrintHelp()
+			os.Exit(0)
+		}
+	}
 
-	db, err := sql.Open("postgres", conf.PgConf)
-	if err != nil {
-		logger.Error(context.Background(), err, "cannot open SQL database")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, os.Interrupt)
+		<-sigc
+		fmt.Fprintln(os.Stderr, "SIGINT")
+		cancel()
+		signal.Stop(sigc)
+	}()
+
+	if err := run(ctx, conf); err != nil {
+		fmt.Fprintf(os.Stderr, "application: %s\n", err)
 		os.Exit(1)
+	}
+}
+
+type configuration struct {
+	Debug       bool
+	HttpPort    string
+	Secret      string
+	DatabaseUrl string
+	NoCsrf      bool
+}
+
+func run(ctx context.Context, conf configuration) error {
+	db, err := sql.Open("postgres", conf.DatabaseUrl)
+	if err != nil {
+		return fmt.Errorf("cannot open SQL database: %s", err)
 	}
 	defer db.Close()
 
 	readTracker, err := gbb.NewPostgresReadProgressTracker(db)
 	if err != nil {
-		logger.Error(ctx, err, "cannot create read progress tracker")
+		return fmt.Errorf("cannot create read progress tracker: %s", err)
 	}
 
 	bbStore, err := gbb.NewPostgresBBStore(db)
 	if err != nil {
-		logger.Error(ctx, err, "cannot create bb store")
+		return fmt.Errorf("cannot create bb store: %s", err)
 	}
 
 	renderer := surf.NewHTMLRenderer("./gbb/templates/**.tmpl", conf.Debug, template.FuncMap{
@@ -65,14 +90,12 @@ func main() {
 
 	authStore, err := surf.NewCookieCache("auth", []byte(conf.Secret))
 	if err != nil {
-		logger.Error(context.Background(), err, "cannot create cookie cache")
-		os.Exit(1)
+		return fmt.Errorf("cannot create cookie cache: %s", err)
 	}
 
 	csrfStore, err := surf.NewCookieCache("csrf", []byte(conf.Secret))
 	if err != nil {
-		logger.Error(context.Background(), err, "cannot create cookie cache")
-		os.Exit(1)
+		return fmt.Errorf("cannot create csrf store: %s", err)
 	}
 	csrf := surf.CsrfMiddleware(csrfStore, renderer)
 	if conf.NoCsrf {
@@ -126,13 +149,26 @@ func main() {
 		Get(gbb.RegisterHandler(authStore, bbStore, renderer)).
 		Post(gbb.RegisterHandler(authStore, bbStore, renderer))
 
+	logger := surf.NewLogger(os.Stdout)
+
 	app := surf.NewHTTPApplication(rt, logger, true)
 
-	logger.Info(context.Background(), "starting server",
-		"port", "8000")
-	if err := http.ListenAndServe(":"+conf.HttpPort, app); err != nil {
-		logger.Error(context.Background(), err, "HTTP server failed")
+	server := http.Server{
+		Addr:    ":" + conf.HttpPort,
+		Handler: app,
 	}
+	go func() {
+		<-ctx.Done()
+		logger.Info(ctx, "stopping HTTP server")
+		server.Shutdown(ctx)
+	}()
+
+	logger.Info(ctx, "starting HTTP server",
+		"port", "8000")
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("http server: %s", err)
+	}
+	return nil
 }
 
 func timeago(t time.Time) string {
