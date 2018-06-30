@@ -146,6 +146,10 @@ func run(ctx context.Context, conf configuration) error {
 		Use(csrf).
 		Get(gbb.RegisterHandler(authStore, bbStore, renderer)).
 		Post(gbb.RegisterHandler(authStore, bbStore, renderer))
+	rt.R(`/settings/`).
+		Use(csrf).
+		Get(gbb.SettingsHandler(authStore, bbStore, renderer)).
+		Post(gbb.SettingsHandler(authStore, bbStore, renderer))
 
 	logger := surf.NewLogger(os.Stdout)
 

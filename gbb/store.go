@@ -57,6 +57,13 @@ type User struct {
 	Scopes UserScope
 }
 
+func (u *User) IsAdmin() bool {
+	if u == nil {
+		return false
+	}
+	return u.Scopes.Has(adminScope)
+}
+
 type UserScope uint16
 
 const (
@@ -71,14 +78,14 @@ func (s UserScope) String() string {
 	return fmt.Sprintf("%b", s)
 }
 
-// Has returns true if scope contains at least one of given scopes
+// Has returns true if scope contains all of given scopes
 func (s UserScope) Has(scopes ...UserScope) bool {
 	for _, scope := range scopes {
-		if s&scope != 0 {
-			return true
+		if s&scope == 0 {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func (s UserScope) Add(scopes UserScope) UserScope {

@@ -1065,3 +1065,30 @@ func MarkAllReadHandler(
 		return surf.Redirect("/t/", http.StatusSeeOther)
 	}
 }
+
+func SettingsHandler(
+	authStore surf.UnboundCacheService,
+	bbstore BBStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil || !user.IsAdmin() {
+			return surf.Redirect("/t/", http.StatusSeeOther)
+		}
+
+		categories, err := bbstore.ListCategories(ctx)
+		if err != nil {
+			surf.LogError(ctx, err, "cannot list categories")
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		}
+
+		return rend.Response(ctx, http.StatusOK, "settings.tmpl", struct {
+			Categories []*Category
+		}{
+			Categories: categories,
+		})
+	}
+}

@@ -14,6 +14,11 @@
       <a href="/t/mark-all-read/">Mark all read</a>
     {{end}}
 
+    {{if .CurrentUser.IsAdmin }}
+      <span class="separator"></span>
+      <a href="/settings/">Settings</a>
+    {{end}}
+
     <span class="separator"></span>
     {{if .CurrentUser}}
       <a href="/logout/">Logout</a>

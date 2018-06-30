@@ -19,6 +19,9 @@ func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, erro
 		span.Finish(
 			"id", fmt.Sprint(u.UserID),
 			"name", u.Name)
+		surf.LogInfo(ctx, "authenticated",
+			"name", u.Name,
+			"userId", fmt.Sprint(u.UserID))
 		return &u, nil
 	case surf.ErrMiss:
 		span.Finish()

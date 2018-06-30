@@ -1,0 +1,11 @@
+{{template "header.tmpl"}}
+
+
+<div>
+  Categories:
+  <textarea>
+    {{- range .Categories}}
+{{.Name}}
+    {{- end -}}
+  </textarea>
+</div>
