@@ -19,7 +19,7 @@ func main() {
 	env := surf.NewEnvConf()
 	conf := configuration{
 		Debug:       env.Bool("DEBUG", false, "Provide additional debug information."),
-		HttpPort:    env.Str("HTTP_PORT", "8000", "HTTP server port."),
+		HttpPort:    env.Str("PORT", "8000", "HTTP server port."),
 		Secret:      env.Secret("SECRET", "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas", "Secret used for security"),
 		DatabaseUrl: env.Secret("DATABASE_URL", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`, "Database connection details."),
 		NoCsrf:      env.Bool("NO_CSRF", false, "Do not requir CSRF token. This should be used only during local development."),
