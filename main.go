@@ -29,13 +29,12 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "-h", "--help", "help":
-			env.PrintHelp()
+			env.WriteHelp(os.Stderr)
 			os.Exit(0)
 		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, os.Interrupt)
