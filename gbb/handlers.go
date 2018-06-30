@@ -242,7 +242,7 @@ func CommentListHandler(
 		CsrfField   template.HTML
 		Topic       *Topic
 		Comments    []*Comment
-		Pagination  *paginator
+		Pagination  *surf.Paginator
 		CanModify   func(*Comment) bool
 	}
 
@@ -325,10 +325,10 @@ func CommentListHandler(
 				}
 				return user.Scopes.Has(adminScope, moderatorScope)
 			},
-			Pagination: &paginator{
-				total:    topic.CommentsCount,
-				pageSize: commentsPerPage,
-				page:     page,
+			Pagination: &surf.Paginator{
+				Total:    topic.CommentsCount,
+				PageSize: commentsPerPage,
+				Page:     page,
 			},
 		})
 	}
