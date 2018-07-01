@@ -108,13 +108,17 @@ func TopicListHandler(
 		}
 
 		return rend.Response(ctx, http.StatusOK, "topic_list.tmpl", struct {
-			CurrentUser   *User
-			Topics        []*TrackedTopic
-			NextPageAfter string
+			CurrentUser       *User
+			Topics            []*TrackedTopic
+			NextPageAfter     string
+			CanChangeSettings func(*User) bool
 		}{
 			CurrentUser:   user,
 			Topics:        trackedTopics,
 			NextPageAfter: nextPageAfter,
+			CanChangeSettings: func(u *User) bool {
+				return u != nil && u.Scopes.HasAny(adminScope, changeSettingsScope)
+			},
 		})
 	}
 }
@@ -148,7 +152,7 @@ func TopicCreateHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		if !user.Scopes.Has(adminScope, createTopicScope) {
+		if !user.Scopes.HasAny(adminScope, createTopicScope) {
 			surf.LogInfo(ctx, "user action rejected due to missing topic creation scope",
 				"scopes", user.Scopes.String(),
 				"user", fmt.Sprint(user.UserID))
@@ -323,7 +327,7 @@ func CommentListHandler(
 				if user.UserID == comment.Author.UserID {
 					return true
 				}
-				return user.Scopes.Has(adminScope, moderatorScope)
+				return user.Scopes.HasAny(adminScope, moderatorScope)
 			},
 			Pagination: &surf.Paginator{
 				Total:    topic.CommentsCount,
@@ -493,7 +497,7 @@ func CommentCreateHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		if !user.Scopes.Has(adminScope, createCommentScope) {
+		if !user.Scopes.HasAny(adminScope, createCommentScope) {
 			surf.LogInfo(ctx, "user action rejected due to missing comment creation scope",
 				"scopes", user.Scopes.String(),
 				"user", fmt.Sprint(user.UserID))
@@ -840,7 +844,7 @@ func CommentEditHandler(
 			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 		}
 
-		if comment.Author.UserID != user.UserID && !user.Scopes.Has(adminScope, moderatorScope) {
+		if comment.Author.UserID != user.UserID && !user.Scopes.HasAny(adminScope, moderatorScope) {
 			surf.LogInfo(ctx, "rejected edit because of permissions",
 				"user", fmt.Sprint(user.UserID),
 				"author", fmt.Sprint(comment.Author.UserID),
@@ -975,7 +979,7 @@ func CommentDeleteHandler(
 		topic, comment, pos, err := bbstore.CommentByID(ctx, commentID)
 		switch err {
 		case nil:
-			if comment.Author.UserID != user.UserID && !user.Scopes.Has(adminScope, moderatorScope) {
+			if comment.Author.UserID != user.UserID && !user.Scopes.HasAny(adminScope, moderatorScope) {
 				surf.LogInfo(ctx, "comment deletion forbidden",
 					"comment", fmt.Sprint(commentID),
 					"author", fmt.Sprint(comment.Author.UserID),
@@ -1075,7 +1079,7 @@ func SettingsHandler(
 		ctx := r.Context()
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		if err != nil || !user.IsAdmin() {
+		if err != nil || !user.Scopes.HasAny(adminScope, changeSettingsScope) {
 			return surf.Redirect("/t/", http.StatusSeeOther)
 		}
 
