@@ -41,35 +41,35 @@ func (m *csrfMiddleware) HandleHTTPRequest(w http.ResponseWriter, r *http.Reques
 	case nil, ErrMiss:
 	default:
 		LogError(ctx, err, "cannot get csrf token from store")
-		return m.reject("cannot get csrf token")
+		return rejectResp("cannot get csrf token")
 	}
 
 	if !isSafeMethod(r.Method) {
 		// if using https, make sure referer does not come from untrusted source
 		if r.URL.Scheme == "https" {
 			if ref, err := url.Parse(r.Referer()); err != nil {
-				return m.reject("missing referer")
+				return rejectResp("missing referer")
 			} else if ref.Scheme != "https" {
-				return m.reject("invalid referer")
+				return rejectResp("invalid referer")
 			}
 		}
 
 		reqToken := requestToken(r)
 		if reqToken == "" {
 			LogError(ctx, errors.New("no csrf"), "no csrf token in request")
-			return m.reject("no csrf token in request")
+			return rejectResp("no csrf token in request")
 		}
 
 		if reqToken != storeToken {
 			LogInfo(ctx, "csrf token missmatch",
 				"requestToken", reqToken,
 				"storeToken", storeToken)
-			return m.reject("csrf token missmatch")
+			return rejectResp("csrf token missmatch")
 		}
 	}
 
 	if storeToken == "" {
-		storeToken = m.newToken()
+		storeToken = newCsrfToken()
 		if err := store.Set(ctx, CsrfKey, storeToken, 30*time.Minute); err != nil {
 			LogError(ctx, err, "cannot store csrf token")
 		}
@@ -92,15 +92,14 @@ func requestToken(r *http.Request) string {
 		return val
 	}
 	if r.MultipartForm != nil {
-		vals := r.MultipartForm.Value[CsrfKey]
-		if len(vals) > 0 {
+		if vals := r.MultipartForm.Value[CsrfKey]; len(vals) > 0 {
 			return vals[0]
 		}
 	}
 	return ""
 }
 
-func (m *csrfMiddleware) newToken() string {
+func newCsrfToken() string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
@@ -108,7 +107,7 @@ func (m *csrfMiddleware) newToken() string {
 	return strings.TrimRight(base64.URLEncoding.EncodeToString(b), "=")
 }
 
-func (m *csrfMiddleware) reject(reason string) Response {
+func rejectResp(reason string) Response {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, reason, http.StatusForbidden)
 	})
