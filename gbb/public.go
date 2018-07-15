@@ -1,6 +1,10 @@
 package gbb
 
 import (
+	"bytes"
+	"compress/gzip"
+	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -74,9 +78,33 @@ func PublicContentHandler(minify bool) surf.HandlerFunc {
 		}
 	}
 
+	compressedStyle, _ := gzipStr(style)
+
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
 		w.Header().Set("content-type", "text/css")
-		http.ServeContent(w, r, r.URL.Path, now, strings.NewReader(style))
+
+		// when available, use gzip compressed stylesheet
+		if compressedStyle != "" && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("content-encoding", "gzip")
+			http.ServeContent(w, r, r.URL.Path, now, strings.NewReader(compressedStyle))
+		} else {
+			http.ServeContent(w, r, r.URL.Path, now, strings.NewReader(style))
+		}
 		return nil
 	}
+}
+
+func gzipStr(s string) (string, error) {
+	var b bytes.Buffer
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
+	if err != nil {
+		return "", fmt.Errorf("cannot create gzip writer: %s", err)
+	}
+	if _, err := io.WriteString(gz, s); err != nil {
+		return "", fmt.Errorf("cannot gzip string: %s", err)
+	}
+	if err := gz.Close(); err != nil {
+		return "", fmt.Errorf("cannot flush gzip writer: %s", err)
+	}
+	return b.String(), nil
 }
