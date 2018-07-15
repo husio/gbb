@@ -42,11 +42,11 @@
       {{range .Topics}}
         <div class="topic {{if .NewContent}}new-content{{end}}">
           <a
-            {{if $root.CurrentUser.Authenticated}}
+            {{- if $root.CurrentUser.Authenticated}}
               href="/t/{{.TopicID}}/last-seen-comment/{{.SlugInfo}}/"
             {{else}}
               href="/t/{{.TopicID}}/{{.SlugInfo}}/"
-            {{end}}
+            {{end -}}
           >
             {{.Subject}}
           </a>
