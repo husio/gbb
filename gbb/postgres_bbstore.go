@@ -54,11 +54,23 @@ func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
 }
 
 func (s *pgBBStore) AddCategory(ctx context.Context, name string) error {
-	panic("todo")
+	_, err := s.db.ExecContext(ctx, `INSERT INTO categories(name) VALUES $1`, name)
+	return err
 }
 
 func (s *pgBBStore) RemoveCategory(ctx context.Context, categoryID int64) error {
-	panic("todo")
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM categories WHERE category_id = $1
+	`, categoryID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("rows affected: %s", err)
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {

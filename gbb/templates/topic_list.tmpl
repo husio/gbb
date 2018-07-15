@@ -37,10 +37,17 @@
 <body>
   {{template "topic-list-menu" .}}
 
-  {{if .Topics}}
+{{with $root := .}}
+  {{if $root.Topics}}
       {{range .Topics}}
         <div class="topic {{if .NewContent}}new-content{{end}}">
-          <a href="/t/{{.TopicID}}/last-seen-comment/{{.SlugInfo}}/">
+          <a
+            {{if $root.CurrentUser.Authenticated}}
+              href="/t/{{.TopicID}}/last-seen-comment/{{.SlugInfo}}/"
+            {{else}}
+              href="/t/{{.TopicID}}/{{.SlugInfo}}/"
+            {{end}}
+          >
             {{.Subject}}
           </a>
 
@@ -68,6 +75,7 @@
   {{else}}
     <div class="box-info">No topics.</div>
   {{end}}
+{{end}}
 
   {{template "topic-list-menu" .}}
 </body>
