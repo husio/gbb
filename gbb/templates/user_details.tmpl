@@ -1,11 +1,21 @@
 {{template "header.tmpl"}}
 
 
-
 <body>
-  <h1>User <strong>{{.Name}}</strong></h1>
+  <div class="menu">
+    <a href="/t/">Back to listing</a>
+    <span class="separator"></span>
+    {{if .CurrentUser}}
+      <a href="/logout/?next=/u/{{.User.UserID}}/">Logout</a>
+      <small>({{.CurrentUser.Name}})</small>
+    {{else}}
+      <a href="/login/?next=/u/{{.User.UserID}}/">Login</a>
+    {{end}}
+  </div>
 
-  <p>Scopes: <code>{{.Scopes}}</code></p>
-  <p>Topics created: {{.TopicsCount}}</p>
-  <p>Comments written: {{.CommentsCount}}</p>
+  <h1>User <strong>{{.User.Name}}</strong></h1>
+
+  <p>Permissions: {{range .User.Scopes.Names}}{{.}} {{end}}</p>
+  <p>Topics created: {{.User.TopicsCount}}</p>
+  <p>Comments written: {{.User.CommentsCount}}</p>
 </body>

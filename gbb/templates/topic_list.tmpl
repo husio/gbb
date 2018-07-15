@@ -1,4 +1,4 @@
-{{define "menu"}}
+{{define "topic-list-menu"}}
   <div class="menu">
     <a class="btn" href="/t/new/">New Topic</a>
     <span class="separator"></span>
@@ -34,15 +34,8 @@
 {{template "header.tmpl"}}
 
 
-<style>
-.topic { margin: 8px 0; }
-.topic-tagline { font-size:80%; padding-left: 10px; color: #444; }
-.topic .new-content-tag { background: #FFFEDC; marign: 3px; padding: 3px; font-size: 80%; }
-.topic .pagination { font-size: 9px; }
-</style>
-
 <body>
-  {{template "menu" .}}
+  {{template "topic-list-menu" .}}
 
   {{if .Topics}}
       {{range .Topics}}
@@ -76,5 +69,5 @@
     <div class="box-info">No topics.</div>
   {{end}}
 
-  {{template "menu" .}}
+  {{template "topic-list-menu" .}}
 </body>

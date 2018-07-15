@@ -9,7 +9,7 @@
   </fieldset>
 
   <fieldset>
-    <textarea name="content" placeholder="Content" required>{{.Input.Content}}</textarea>
+    <textarea class="big" name="content" placeholder="Content" required>{{.Input.Content}}</textarea>
       Use <a href="https://gist.github.com/budparr/9257428">markdown</a> to format content.
     {{if .Errors.Content -}}
       <div>{{.Errors.Content}}</div>

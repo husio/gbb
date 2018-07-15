@@ -53,6 +53,14 @@ func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
 	return categories, nil
 }
 
+func (s *pgBBStore) AddCategory(ctx context.Context, name string) error {
+	panic("todo")
+}
+
+func (s *pgBBStore) RemoveCategory(ctx context.Context, categoryID int64) error {
+	panic("todo")
+}
+
 func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {
 	var topics []*Topic
 	resp, err := s.db.QueryContext(ctx, `

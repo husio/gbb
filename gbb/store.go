@@ -27,6 +27,8 @@ type BBStore interface {
 	Search(ctx context.Context, searchText string, categories []int64, offset, limit int64) ([]*SearchResult, error)
 
 	ListCategories(ctx context.Context) ([]*Category, error)
+	AddCategory(ctx context.Context, name string) error
+	RemoveCategory(ctx context.Context, categoryID int64) error
 
 	RegisterUser(ctx context.Context, password string, u User) (*User, error)
 	AuthenticateUser(ctx context.Context, login, password string) (*User, error)
@@ -70,6 +72,26 @@ const (
 
 func (s UserScope) String() string {
 	return fmt.Sprintf("%b", s)
+}
+
+func (s UserScope) Names() []string {
+	var names []string
+	if s&adminScope != 0 {
+		names = append(names, "admin")
+	}
+	if s&moderatorScope != 0 {
+		names = append(names, "moderator")
+	}
+	if s&createTopicScope != 0 {
+		names = append(names, "createTopic")
+	}
+	if s&createCommentScope != 0 {
+		names = append(names, "createComment")
+	}
+	if s&changeSettingsScope != 0 {
+		names = append(names, "changeSettings")
+	}
+	return names
 }
 
 // HasAny returns true if scope contains any of given scopes

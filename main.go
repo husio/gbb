@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +25,7 @@ func main() {
 		Secret:      env.Secret("SECRET", "asoihqw0hqf098yr1309ry{RQ#Y)ASY{F[0u9rq3[0uqfafasffas", "Secret used for security"),
 		DatabaseUrl: env.Secret("DATABASE_URL", `host='localhost' port='5432' user='postgres' dbname='postgres' sslmode='disable'`, "Database connection details."),
 		NoCsrf:      env.Bool("NO_CSRF", false, "Do not requir CSRF token. This should be used only during local development."),
+		NoLogs:      env.Bool("NO_LOGS", false, "Do not write logs."),
 	}
 
 	if len(os.Args) > 1 {
@@ -55,6 +58,7 @@ type configuration struct {
 	Secret      string
 	DatabaseUrl string
 	NoCsrf      bool
+	NoLogs      bool
 }
 
 func run(ctx context.Context, conf configuration) error {
@@ -150,8 +154,16 @@ func run(ctx context.Context, conf configuration) error {
 		Use(csrf).
 		Get(gbb.SettingsHandler(authStore, bbStore, renderer)).
 		Post(gbb.SettingsHandler(authStore, bbStore, renderer))
+	rt.R(`/public/style.css`).
+		Get(gbb.PublicContentHandler(true))
 
-	logger := surf.NewLogger(os.Stdout)
+	var logOutput io.Writer
+	if conf.NoLogs {
+		logOutput = ioutil.Discard
+	} else {
+		logOutput = os.Stdout
+	}
+	logger := surf.NewLogger(logOutput)
 
 	app := surf.NewHTTPApplication(rt, logger, true)
 

@@ -1,9 +1,5 @@
 {{template "header.tmpl"}}
 
-<style>
-textarea { min-height: 400px; }
-</style>
-
 <form method="POST" action="." enctype="multipart/form-data" autocomplete="off">
   <fieldset>
     <input type="text" name="subject" value="{{.Input.Subject}}" placeholder="Subject" required>
@@ -26,7 +22,7 @@ textarea { min-height: 400px; }
   </fieldset>
 
   <fieldset>
-    <textarea name="content" placeholder="Content" required>{{.Input.Content}}</textarea>
+    <textarea class="big" name="content" placeholder="Content" required>{{.Input.Content}}</textarea>
       Use <a href="https://gist.github.com/budparr/9257428">markdown</a> to format content.
     {{if .Errors.Content -}}
       <div class="box-danger">{{.Errors.Content}}</div>

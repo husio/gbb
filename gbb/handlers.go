@@ -18,12 +18,25 @@ func UserDetailsHandler(
 	rend surf.HTMLRenderer,
 ) surf.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
 		userID := surf.PathArgInt64(r, 0)
 
-		ctx := r.Context()
-		switch user, err := bbStore.UserInfo(ctx, userID); err {
+		currentUser, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil && err != ErrUnauthenticated {
+			surf.LogError(ctx, err, "cannot authenticated user")
+		}
+
+		switch browsedUser, err := bbStore.UserInfo(ctx, userID); err {
 		case nil:
-			return rend.Response(ctx, http.StatusOK, "user_details.tmpl", user)
+			return rend.Response(ctx, http.StatusOK, "user_details.tmpl", struct {
+				User        *UserInfo
+				CurrentUser *User
+			}{
+				User:        browsedUser,
+				CurrentUser: currentUser,
+			})
+
 		case ErrNotFound:
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
@@ -1094,5 +1107,48 @@ func SettingsHandler(
 		}{
 			Categories: categories,
 		})
+	}
+}
+
+func SettingsChangeCategoriesHandler(
+	authStore surf.UnboundCacheService,
+	bbstore BBStore,
+	rend surf.HTMLRenderer,
+) surf.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) surf.Response {
+		ctx := r.Context()
+
+		user, err := CurrentUser(ctx, authStore.Bind(w, r))
+		if err != nil || !user.Scopes.HasAny(adminScope, changeSettingsScope) {
+			return surf.Redirect("/t/", http.StatusSeeOther)
+		}
+
+		if r.Method != "POST" {
+			return surf.Redirect(r.URL.Path, http.StatusSeeOther)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			return surf.StdResponse(ctx, rend, http.StatusBadRequest)
+		}
+
+		want := make(map[string]struct{})
+		for _, name := range strings.Split(r.Form.Get("categories"), "\n") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				want[name] = struct{}{}
+			}
+		}
+
+		existing := make(map[string]*Category)
+		if categories, err := bbstore.ListCategories(ctx); err != nil {
+			surf.LogError(ctx, err, "cannot list categories")
+			return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+		} else {
+			for _, c := range categories {
+				existing[c.Name] = c
+			}
+		}
+
+		return surf.Redirect(r.URL.Path, http.StatusSeeOther)
 	}
 }
