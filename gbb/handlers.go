@@ -326,8 +326,6 @@ func CommentListHandler(
 			}
 		}
 
-		surf.LogInfo(ctx, "template context prepared")
-
 		return rend.Response(ctx, http.StatusOK, "comment_list.tmpl", Content{
 			CurrentUser: user,
 			CsrfField:   surf.CsrfField(ctx),
@@ -433,7 +431,7 @@ func LastSeenCommentHandler(
 					url = fmt.Sprintf("/t/%d/%s/#comment-%d", topic.TopicID, topic.SlugInfo(), p.CommentID)
 				} else {
 					page := (position / commentsPerPage) + 1
-					url = fmt.Sprintf("/t/%d/%s/?page=%d#comment-%d", topic.TopicID, topic.SlugInfo(), page+1, p.CommentID)
+					url = fmt.Sprintf("/t/%d/%s/?page=%d#comment-%d", topic.TopicID, topic.SlugInfo(), page, p.CommentID)
 				}
 				return surf.Redirect(url, http.StatusSeeOther)
 			} else {
