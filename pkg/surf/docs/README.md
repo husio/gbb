@@ -3,6 +3,19 @@
 "Batteries included" web development package. No external dependencies.
 
 
+- [`surf`](#-surf-)
+  * [Router](#router)
+    + [Handlers](#handlers)
+    + [Middlewares](#middlewares)
+  * [Logging](#logging)
+  * [Traces](#traces)
+  * [Debug Toolbar](#debug-toolbar)
+  * [HTML Template](#html-template)
+  * [Cache](#cache)
+  * [CSRF](#csrf)
+  * [SQL](#sql)
+
+
 ## Router
 
 When defining a [route](https://godoc.org/github.com/go-surf/surf#Route) in `surf`, you must explicitly declare which methods are handled.
