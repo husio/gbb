@@ -5,7 +5,7 @@
 
 ## Router
 
-When defining a [route](https://godoc.org/github.com/go-surf/surf#Route) in `surf`, you must explicitly declare, which methods are handled.
+When defining a [route](https://godoc.org/github.com/go-surf/surf#Route) in `surf`, you must explicitly declare which methods are handled.
 
 ```go
 rt := surf.NewRouter()
@@ -14,22 +14,22 @@ rt.R(`/users/(user-id:\d+)`).
     Post(handleUserUpdate)
 ```
 
-Path declaration use regular expressions to match the URL's path. Above path is translated to `^/users/\d+$`. Brackets and pattern name (`user-id`) are a syntactic sugar to make declaration look nicer. Use [`surf.PathArg`](https://godoc.org/github.com/go-surf/surf#PathArg) to access matched value inside of a handler.
+Path declarations use regular expressions to match the URL's path. Above path is translated to `^/users/\d+$`. Parentheses and pattern name (`user-id`) are a syntactic sugar to make declarations look nicer. Use [`surf.PathArg`](https://godoc.org/github.com/go-surf/surf#PathArg) to access the matched value inside of a handler.
 
-Not found or method not allowed errors are rendered using `surf/render_error.tmpl`. Default template is provided by `surf`, but can be overwritten to customize error messages.
+Not found or method not allowed errors are rendered using `surf/render_error.tmpl`. A default template is provided by `surf`, but can be overwritten to customize error messages.
 
 ### Handlers
 
 Provided handler can use different notation (see [`AsHandler`](https://godoc.org/github.com/go-surf/surf#AsHandler) for more details).
 
-When writing [escape early if statements](https://softwareengineering.stackexchange.com/questions/18454/should-i-return-from-a-function-early-or-use-an-if-statement), because of default `http.Handler` notation, you may forget to `return` and only later realize of the mistake. To help with this issue, `surf` supports [`surf.HandlerFunc`](https://godoc.org/github.com/go-surf/surf#HandlerFunc) notation, that returns [`surf.Response`](https://godoc.org/github.com/go-surf/surf#Response).
+When writing [escape early if statements](https://softwareengineering.stackexchange.com/questions/18454/should-i-return-from-a-function-early-or-use-an-if-statement), because of default `http.Handler` notation, you may forget to `return` and only later realize the mistake. To help with this issue, `surf` supports [`surf.HandlerFunc`](https://godoc.org/github.com/go-surf/surf#HandlerFunc) notation, that returns a [`surf.Response`](https://godoc.org/github.com/go-surf/surf#Response).
 
-If you want to directly write response to `http.ResponseWriter` instead of returning `surf.Response` instance, return `nil`.
+If you want to directly write a response to `http.ResponseWriter` instead of returning a `surf.Response` instance, return `nil`.
 
 
 ### Middlewares
 
-Any route can provide [middlewares](https://godoc.org/github.com/go-surf/surf#Middleware) to all it's handlers:
+Any route can provide [middlewares](https://godoc.org/github.com/go-surf/surf#Middleware) to all its handlers:
 
 ```go
 rt.R(`/users/(user-id:\d+)`).
@@ -37,7 +37,6 @@ rt.R(`/users/(user-id:\d+)`).
     Get(handleUserDetails).
     Use(surf.CsrfMiddleware(cache, tmpl).
     Post(handleUserUpdate)
-
 ```
 
 `myMiddlware` is called for both handlers, while `surf.CsrfMiddleware` is used only for the `POST` method.
@@ -46,14 +45,14 @@ rt.R(`/users/(user-id:\d+)`).
 
 Logging is done using one of two logging functions. Use [`LogInfo`](https://godoc.org/github.com/go-surf/surf#LogInfo) or [`LogError`](https://godoc.org/github.com/go-surf/surf#LogError) to write error logs.
 
-Remember to use [`surf.LoggingMiddleware`](https://godoc.org/github.com/go-surf/surf#LoggingMiddleware). It attaches logger instance to each request's context, providing additional request information.
+Remember to use [`surf.LoggingMiddleware`](https://godoc.org/github.com/go-surf/surf#LoggingMiddleware).  It attaches a logger instance to each request's context, providing additional request information.
 
-Log entry must contain a message and can have any number of additional key-value parameters. To ensure explicit formatting, each key-value pair must be a string.
+A log entry must contain a message and can have any number of additional key-value parameters. To ensure explicit formatting, each key-value pair must be a string.
 
 ```go
 surf.LogInfo(ctx, "Playing surfin' USA",
-    "author", "Blind Guardian",
-    "luckyNumber", fmt.Sprint(myLuckyNumber))
+     "author", "Blind Guardian",
+     "luckyNumber", fmt.Sprint(myLuckyNumber))
 ```
 
 
@@ -65,17 +64,17 @@ Use [`TracingMiddleware`](https://godoc.org/github.com/go-surf/surf#TracingMiddl
 
 Traces are sampled and gathered for only some requests to avoid performance degradation due to measuring.
 
-Best practice is to provide a wrapper for your services ([database](https://github.com/go-surf/surf/blob/master/sqldb/sql_trace.go), [cache](https://godoc.org/github.com/go-surf/surf#TraceCache), RPC client) that transparently for the user create traces.
+Best practice is to provide a wrapper for your services ([database](https://github.com/go-surf/surf/blob/master/sqldb/sql_trace.go), [cache](https://godoc.org/github.com/go-surf/surf#TraceCache), RPC client) that transparently create traces for the user.
 
 ## Debug Toolbar
 
-*Debug toolbar must be used only during local development*. It display many useful informations about handled requests on a single page.
+*Debug toolbar must be used only during local development*. It displays useful information about handled requests on a single page.
 
 ![](debug_toolbar.png)
 
 ## HTML Template
 
-`surf` provides an [`HTML Renderer`](https://godoc.org/github.com/go-surf/surf#NewHTMLRenderer) for rendering HTML documents. It is using `html/template` package to render.
+`surf` provides an [`HTML Renderer`](https://godoc.org/github.com/go-surf/surf#NewHTMLRenderer) for rendering HTML documents. It is using the `html/template` package to render.
 
 When in debug mode, all rendering failures return friendly error pages.
 
@@ -83,7 +82,8 @@ When in debug mode, all rendering failures return friendly error pages.
 
 ![](template_parse_error.png)
 
-`surf` comes with many default HTML templates predefined, for example for standard HTTP error pages, but they can be overwritten by the application.
+`surf` comes with many default HTML templates predefined, for example for standard HTTP error pages, but they can be overwritten by the
+application.
 
 
 ## Cache
