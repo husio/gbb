@@ -53,24 +53,30 @@ func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
 	return categories, nil
 }
 
-func (s *pgBBStore) AddCategory(ctx context.Context, name string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO categories(name) VALUES $1`, name)
-	return err
-}
-
-func (s *pgBBStore) RemoveCategory(ctx context.Context, categoryID int64) error {
-	res, err := s.db.ExecContext(ctx, `
-		DELETE FROM categories WHERE category_id = $1
-	`, categoryID)
+func (s *pgBBStore) AddCategories(ctx context.Context, names []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("begin: %s", err)
 	}
-	if n, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("rows affected: %s", err)
-	} else if n == 0 {
-		return ErrNotFound
+	defer tx.Rollback()
+
+	for _, name := range names {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO categories(name) VALUES ($1)`, name); err != nil {
+			return fmt.Errorf("cannot insert %q: %s", name, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %s", err)
 	}
 	return nil
+}
+
+func (s *pgBBStore) RemoveCategories(ctx context.Context, categoryIDs []int64) error {
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM categories WHERE category_id = ANY($1)
+	`, pq.Int64Array(categoryIDs))
+	return err
 }
 
 func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {

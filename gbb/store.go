@@ -27,8 +27,8 @@ type BBStore interface {
 	Search(ctx context.Context, searchText string, categories []int64, offset, limit int64) ([]*SearchResult, error)
 
 	ListCategories(ctx context.Context) ([]*Category, error)
-	AddCategory(ctx context.Context, name string) error
-	RemoveCategory(ctx context.Context, categoryID int64) error
+	AddCategories(ctx context.Context, name []string) error
+	RemoveCategories(ctx context.Context, categoryID []int64) error
 
 	RegisterUser(ctx context.Context, password string, u User) (*User, error)
 	AuthenticateUser(ctx context.Context, login, password string) (*User, error)

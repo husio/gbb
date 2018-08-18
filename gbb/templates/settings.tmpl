@@ -1,11 +1,19 @@
 {{template "header.tmpl"}}
 
+<div class="menu">
+  <a href="/t/">Back to listing</a>
+</div>
 
-<div>
+
+<form method="POST" action=".">
+  {{.CsrfField}}
+
   Categories:
   <textarea name="categories">
     {{- range .Categories}}
 {{.Name}}
     {{- end -}}
   </textarea>
-</div>
+
+  <button>Save</button>
+</form>

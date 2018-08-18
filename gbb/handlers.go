@@ -1101,14 +1101,16 @@ func SettingsHandler(
 		}
 
 		return rend.Response(ctx, http.StatusOK, "settings.tmpl", struct {
+			CsrfField  template.HTML
 			Categories []*Category
 		}{
+			CsrfField:  surf.CsrfField(ctx),
 			Categories: categories,
 		})
 	}
 }
 
-func SettingsChangeCategoriesHandler(
+func SaveSettingsHandler(
 	authStore surf.UnboundCacheService,
 	bbstore BBStore,
 	rend surf.HTMLRenderer,
@@ -1146,6 +1148,36 @@ func SettingsChangeCategoriesHandler(
 				existing[c.Name] = c
 			}
 		}
+
+		var toremove []int64
+		for name, c := range existing {
+			if _, ok := want[name]; !ok {
+				toremove = append(toremove, c.CategoryID)
+			}
+		}
+		if len(toremove) > 0 {
+			if err := bbstore.RemoveCategories(ctx, toremove); err != nil {
+				surf.LogError(ctx, err, "cannot remove categories")
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+			}
+		}
+
+		var tocreate []string
+		for c := range want {
+			if _, ok := existing[c]; !ok {
+				tocreate = append(tocreate, c)
+			}
+		}
+		if len(tocreate) > 0 {
+			if err := bbstore.AddCategories(ctx, tocreate); err != nil {
+				surf.LogError(ctx, err, "cannot create categories")
+				return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
+			}
+		}
+
+		surf.LogInfo(ctx, "categories",
+			"tocreate", fmt.Sprint(tocreate),
+			"toremove", fmt.Sprint(toremove))
 
 		return surf.Redirect(r.URL.Path, http.StatusSeeOther)
 	}

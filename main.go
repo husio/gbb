@@ -153,7 +153,7 @@ func run(ctx context.Context, conf configuration) error {
 	rt.R(`/settings/`).
 		Use(csrf).
 		Get(gbb.SettingsHandler(authStore, bbStore, renderer)).
-		Post(gbb.SettingsHandler(authStore, bbStore, renderer))
+		Post(gbb.SaveSettingsHandler(authStore, bbStore, renderer))
 	rt.R(`/public/style.css`).
 		Get(gbb.PublicContentHandler(true))
 
