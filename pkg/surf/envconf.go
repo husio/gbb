@@ -21,6 +21,7 @@ type variable struct {
 	name  string
 	value string
 	desc  string
+	typ   string
 }
 
 // NewEnvConf returns configuration instance that use environment variable for
@@ -48,6 +49,8 @@ func (c *EnvConf) WriteHelp(w io.Writer) {
 	for _, v := range c.vars {
 		io.WriteString(wr, v.name)
 		io.WriteString(wr, "\t")
+		io.WriteString(wr, v.typ)
+		io.WriteString(wr, "\t")
 		io.WriteString(wr, v.value)
 		if len(v.desc) > 0 {
 			io.WriteString(wr, "\t")
@@ -66,20 +69,28 @@ func (c *EnvConf) Str(name, fallback, description string) string {
 		name:  name,
 		value: value,
 		desc:  description,
+		typ:   "string",
 	})
 	return value
 }
 
 func (c *EnvConf) Secret(name, fallback, description string) string {
+	value := fallback
+	if v, ok := c.env[name]; ok {
+		value = v
+	}
+
+	pubvalue := "[..]" // secret does not expose it's default value
+	if len(value) == 0 {
+		pubvalue = ""
+	}
 	c.vars = append(c.vars, variable{
 		name:  name,
-		value: "<secret>", // secret does not expose it's default value
+		value: pubvalue,
 		desc:  description,
+		typ:   "string",
 	})
-	if v, ok := c.env[name]; ok {
-		return v
-	}
-	return fallback
+	return value
 }
 
 func (c *EnvConf) Int(name string, fallback int, description string) int {
@@ -96,6 +107,7 @@ func (c *EnvConf) Int(name string, fallback int, description string) int {
 		name:  name,
 		value: strconv.Itoa(value),
 		desc:  description,
+		typ:   "int",
 	})
 	return value
 }
@@ -113,6 +125,7 @@ func (c *EnvConf) Bool(name string, fallback bool, description string) bool {
 		name:  name,
 		value: fmt.Sprint(value),
 		desc:  description,
+		typ:   "bool",
 	})
 
 	return value
@@ -131,6 +144,7 @@ func (c *EnvConf) Duration(name string, fallback time.Duration, description stri
 		name:  name,
 		value: value.String(),
 		desc:  description,
+		typ:   "duration",
 	})
 
 	return value
