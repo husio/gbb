@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/husio/gbb/pkg/surf"
+	"github.com/go-surf/surf"
 )
 
 func UserDetailsHandler(

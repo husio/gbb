@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/husio/gbb/gbb"
-	"github.com/husio/gbb/pkg/surf"
+	"github.com/go-surf/surf"
 	"github.com/shurcooL/github_flavored_markdown"
 )
 

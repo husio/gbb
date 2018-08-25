@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/husio/gbb/pkg/surf"
+	"github.com/go-surf/surf"
 )
 
 func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, error) {

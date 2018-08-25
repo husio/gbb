@@ -3,6 +3,24 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "r9K5onDyZuJlRnhL9zTTb09yDnA=",
+			"path": "github.com/go-surf/surf",
+			"revision": "98c4f8f76f1f835b6aa8e730ff2935da81b795e4",
+			"revisionTime": "2018-08-25T16:38:25Z"
+		},
+		{
+			"checksumSHA1": "HlLCDh4uirvi6+JkWGmL0lQbzTo=",
+			"path": "github.com/go-surf/surf/sqldb",
+			"revision": "98c4f8f76f1f835b6aa8e730ff2935da81b795e4",
+			"revisionTime": "2018-08-25T16:38:25Z"
+		},
+		{
+			"checksumSHA1": "VHu29BpZrVn3J+Wj99EhMUdakc4=",
+			"path": "github.com/husio/gbb/pkg/surf",
+			"revision": "5b37fb9dd3c065d57a8947e80a39029e97803684",
+			"revisionTime": "2018-08-19T14:21:41Z"
+		},
+		{
 			"checksumSHA1": "V1a5/Ra9HXKNuArt5WKUqu+Jxt8=",
 			"path": "github.com/lib/pq",
 			"revision": "19c8e9ad00952ce0c64489b60e8df88bb16dd514",

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/husio/gbb/pkg/surf"
-	"github.com/husio/gbb/pkg/surf/sqldb"
+	"github.com/go-surf/surf"
+	"github.com/go-surf/surf/sqldb"
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
