@@ -3,16 +3,16 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "r9K5onDyZuJlRnhL9zTTb09yDnA=",
+			"checksumSHA1": "6vuw/M/vWQYPs/oB+eNqqygys0E=",
 			"path": "github.com/go-surf/surf",
-			"revision": "98c4f8f76f1f835b6aa8e730ff2935da81b795e4",
-			"revisionTime": "2018-08-25T16:38:25Z"
+			"revision": "02331c15b44b2b9ddfd3610af85456a2d820b81c",
+			"revisionTime": "2018-08-26T13:54:57Z"
 		},
 		{
-			"checksumSHA1": "HlLCDh4uirvi6+JkWGmL0lQbzTo=",
+			"checksumSHA1": "Wv5ksOYVRLwKu3W6TkmrqK+sk6Q=",
 			"path": "github.com/go-surf/surf/sqldb",
-			"revision": "98c4f8f76f1f835b6aa8e730ff2935da81b795e4",
-			"revisionTime": "2018-08-25T16:38:25Z"
+			"revision": "02331c15b44b2b9ddfd3610af85456a2d820b81c",
+			"revisionTime": "2018-08-26T13:54:57Z"
 		},
 		{
 			"checksumSHA1": "VHu29BpZrVn3J+Wj99EhMUdakc4=",

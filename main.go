@@ -12,8 +12,8 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/husio/gbb/gbb"
 	"github.com/go-surf/surf"
+	"github.com/husio/gbb/gbb"
 	"github.com/shurcooL/github_flavored_markdown"
 )
 
