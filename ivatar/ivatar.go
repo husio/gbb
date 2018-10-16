@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
+	"html"
 	"html/template"
 	"io"
 	"strings"
@@ -21,13 +22,14 @@ func build(name string, width, height int) string {
 			break
 		}
 	}
+	iname := html.EscapeString(strings.ToUpper(string(initials)))
 
 	h := fnv.New32()
 	io.WriteString(h, name)
 	color := colors[int(h.Sum32())%len(colors)]
 	svg := fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" pointer-events="none" width="%d" height="%d" style="background-color: %s; width: %dpx; height: %dpx;"><text text-anchor="middle" y="50%%" x="50%%" dy="0.35em" pointer-events="auto" fill="#ffffff" font-family="HelveticaNeue-Light,Helvetica Neue Light,Helvetica Neue,Helvetica,Arial,Lucida Grande,sans-serif" style="font-weight:bold;font-size:%dpx;">%s</text></svg>`,
-		width, height, color, width, height, (width*4)/9, strings.ToUpper(string(initials)))
+		width, height, color, width, height, (width*4)/9, iname)
 	return base64.StdEncoding.EncodeToString([]byte(svg))
 }
 
