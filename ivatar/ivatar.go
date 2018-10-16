@@ -14,14 +14,29 @@ import (
 // build returns ivatar built from given name. The same name always returns the
 // same ivatar representation.
 func build(name string, width, height int) string {
-	initials := make([]byte, 0, 2)
-	initials = append(initials, name[0])
+	initials := make([]rune, 0, 2)
 	for i, r := range name {
-		if unicode.IsSpace(r) && len(name) > i {
-			initials = append(initials, name[i+1])
-			break
+		if !unicode.IsLetter(r) {
+			continue
 		}
+		initials = append(initials, r)
+		add := false
+		for i, r := range name[i:] {
+			if add {
+				initials = append(initials, r)
+				break
+			}
+			if unicode.IsSpace(r) && len(name) > i {
+				add = true
+			}
+		}
+		break
 	}
+
+	if len(initials) == 0 {
+		initials = []rune(name[:2])
+	}
+
 	iname := html.EscapeString(strings.ToUpper(string(initials)))
 
 	h := fnv.New32()
