@@ -31,7 +31,9 @@
     {{range $root.Comments}}
       <div class="comment" id="comment-{{.CommentID}}">
         <div class="comment-header">
-          <a href="#comment-{{.CommentID}}" title="direct link to the comment">#</a>
+          <a href="#comment-{{.CommentID}}" title="direct link to the comment">
+            {{avatarimg .Author.Name}}
+          </a>
           <a href="/u/{{.Author.UserID}}/">{{.Author.Name}}</a>
           <small>
             <span class="separator"></span>

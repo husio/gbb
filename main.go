@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-surf/surf"
 	"github.com/husio/gbb/gbb"
+	"github.com/husio/gbb/ivatar"
 	"github.com/shurcooL/github_flavored_markdown"
 )
 
@@ -88,6 +89,9 @@ func run(ctx context.Context, conf configuration) error {
 			html := fmt.Sprintf(`<span title="%s">%s</span>`, t.Format("Mon, Jan 2 2006, 15:04"), ago)
 			return template.HTML(html)
 		},
+		"avatarimg": func(name string) template.HTML {
+			return ivatar.BuildImg(name)
+		},
 	})
 
 	authStore, err := surf.NewCookieCache("auth", []byte(conf.Secret))
@@ -155,7 +159,7 @@ func run(ctx context.Context, conf configuration) error {
 		Get(gbb.SettingsHandler(authStore, bbStore, renderer)).
 		Post(gbb.SaveSettingsHandler(authStore, bbStore, renderer))
 	rt.R(`/public/style.css`).
-		Get(gbb.PublicContentHandler(true))
+		Get(gbb.StyleHandler(!conf.Debug))
 
 	var logOutput io.Writer
 	if conf.NoLogs {
