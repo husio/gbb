@@ -11,9 +11,9 @@ import (
 	"unicode"
 )
 
-// build returns ivatar built from given name. The same name always returns the
-// same ivatar representation.
-func build(name string, width, height int) string {
+// avatarContent returns ivatar built from given name. The same name always
+// returns the same ivatar representation.
+func avatarContent(name string, width, height int) string {
 	initials := make([]rune, 0, 2)
 	for i, r := range name {
 		if !unicode.IsLetter(r) {
@@ -48,10 +48,12 @@ func build(name string, width, height int) string {
 	return base64.StdEncoding.EncodeToString([]byte(svg))
 }
 
-func BuildImg(name string) template.HTML {
-	content := build(name, 24, 24)
-	img := fmt.Sprintf(`<img src="data:image/svg+xml;base64,%s" class="avatar">`, content)
-	return template.HTML(img)
+// ImgSrc returns an encoded avatar content, ready to be used as a src value of
+// an image tag.
+func ImgSrc(name string, size int) template.HTMLAttr {
+	content := avatarContent(name, size, size)
+	src := `src="data:image/svg+xml;base64,` + content + `"`
+	return template.HTMLAttr(src)
 }
 
 var colors = []string{

@@ -89,8 +89,8 @@ func run(ctx context.Context, conf configuration) error {
 			html := fmt.Sprintf(`<span title="%s">%s</span>`, t.Format("Mon, Jan 2 2006, 15:04"), ago)
 			return template.HTML(html)
 		},
-		"avatarimg": func(name string) template.HTML {
-			return ivatar.BuildImg(name)
+		"avatarsrc": func(name string, size int) template.HTMLAttr {
+			return ivatar.ImgSrc(name, size)
 		},
 	})
 
