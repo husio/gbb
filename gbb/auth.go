@@ -2,11 +2,11 @@ package gbb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-surf/surf"
+	"github.com/go-surf/surf/errors"
 )
 
 func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, error) {
@@ -14,8 +14,8 @@ func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, erro
 
 	span := surf.CurrentTrace(ctx).Begin("current user")
 
-	switch err := boundCache.Get(ctx, "user", &u); err {
-	case nil:
+	switch err := boundCache.Get(ctx, "user", &u); {
+	case err == nil:
 		span.Finish(
 			"id", fmt.Sprint(u.UserID),
 			"name", u.Name)
@@ -23,7 +23,7 @@ func CurrentUser(ctx context.Context, boundCache surf.CacheService) (*User, erro
 			"name", u.Name,
 			"userId", fmt.Sprint(u.UserID))
 		return &u, nil
-	case surf.ErrMiss:
+	case surf.ErrNotFound.Is(err):
 		span.Finish()
 		return nil, ErrUnauthenticated
 	default:

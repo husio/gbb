@@ -2,12 +2,11 @@ package gbb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"time"
 
-	"github.com/go-surf/surf/sqldb"
+	"github.com/go-surf/surf/errors"
 )
 
 type BBStore interface {
@@ -158,18 +157,11 @@ type SearchResult struct {
 }
 
 var (
-	ErrNotFound   = errors.New("not found")
-	ErrConstraint = errors.New("constraint")
+	ErrNotFound             = errors.New("not found")
+	ErrUserNotFound         = errors.Wrap(ErrNotFound, "user")
+	ErrTopicNotFound        = errors.Wrap(ErrNotFound, "topic")
+	ErrCommentNotFound      = errors.Wrap(ErrNotFound, "comment")
+	ErrReadprogressNotFound = errors.Wrap(ErrNotFound, "readprogress")
+	ErrConstraint           = errors.New("constraint")
+	ErrPermission           = errors.New("permission denied")
 )
-
-// castErr map sql error to gbb's local representation
-func castErr(err error) error {
-	switch err {
-	case sqldb.ErrNotFound:
-		return ErrNotFound
-	case sqldb.ErrConstraint:
-		return ErrConstraint
-	default:
-		return err
-	}
-}

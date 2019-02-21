@@ -27,8 +27,8 @@ func UserDetailsHandler(
 			surf.LogError(ctx, err, "cannot authenticated user")
 		}
 
-		switch browsedUser, err := bbStore.UserInfo(ctx, userID); err {
-		case nil:
+		switch browsedUser, err := bbStore.UserInfo(ctx, userID); {
+		case err == nil:
 			return rend.Response(ctx, http.StatusOK, "user_details.tmpl", struct {
 				User        *UserInfo
 				CurrentUser *User
@@ -36,8 +36,7 @@ func UserDetailsHandler(
 				User:        browsedUser,
 				CurrentUser: currentUser,
 			})
-
-		case ErrNotFound:
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.LogError(ctx, err, "cannot get user",
@@ -155,10 +154,10 @@ func TopicCreateHandler(
 		ctx := r.Context()
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		switch err {
-		case nil:
-			// all good
-		case ErrUnauthenticated:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrUnauthenticated.Is(err):
 			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
 			surf.LogError(ctx, err, "cannot get current user")
@@ -282,10 +281,10 @@ func CommentListHandler(
 		offset := (page - 1) * commentsPerPage
 
 		topic, err := bbStore.TopicByID(ctx, topicID)
-		switch err := castErr(err); err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			w.WriteHeader(http.StatusBadRequest)
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
@@ -362,10 +361,10 @@ func LastCommentHandler(
 		topicID := surf.PathArgInt64(r, 0)
 
 		topic, err := bbStore.TopicByID(ctx, topicID)
-		switch err := castErr(err); err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.LogError(ctx, err, "cannot fetch topic",
@@ -394,10 +393,10 @@ func LastSeenCommentHandler(
 		topicID := surf.PathArgInt64(r, 0)
 
 		topic, err := bbStore.TopicByID(ctx, topicID)
-		switch err := castErr(err); err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.LogError(ctx, err, "cannot fetch topic",
@@ -460,10 +459,10 @@ func GotoCommentHandler(
 		commentID := surf.PathArgInt64(r, 0)
 
 		topic, comment, position, err := bbStore.CommentByID(ctx, commentID)
-		switch err := castErr(err); err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.LogError(ctx, err, "cannot fetch comment",
@@ -498,10 +497,10 @@ func CommentCreateHandler(
 		content := strings.TrimSpace(r.Form.Get("content"))
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		switch err {
-		case nil:
-			// all good
-		case ErrUnauthenticated:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrUnauthenticated.Is(err):
 			return surf.Redirect("/login/?next="+url.QueryEscape(r.URL.String()), http.StatusTemporaryRedirect)
 		default:
 			surf.LogError(ctx, err, "cannot get current user")
@@ -522,10 +521,10 @@ func CommentCreateHandler(
 		// TODO: validate input
 
 		topic, err := bbStore.TopicByID(ctx, topicID)
-		switch err := castErr(err); err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.LogError(ctx, err, "cannot fetch topic",
@@ -534,10 +533,10 @@ func CommentCreateHandler(
 		}
 
 		comment, err := bbStore.CreateComment(ctx, topicID, content, user.UserID)
-		switch err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusBadRequest)
 		default:
 			surf.LogError(ctx, err, "cannot create comment",
@@ -580,8 +579,8 @@ func LoginHandler(
 			login := r.FormValue("login")
 			passwd := r.FormValue("password")
 
-			switch user, err := bbStore.AuthenticateUser(ctx, login, passwd); err {
-			case nil:
+			switch user, err := bbStore.AuthenticateUser(ctx, login, passwd); {
+			case err == nil:
 				if err := Login(ctx, boundCache, *user); err != nil {
 					surf.LogError(ctx, err, "cannot login user",
 						"login", login)
@@ -593,7 +592,7 @@ func LoginHandler(
 					}
 					return surf.Redirect(next, http.StatusSeeOther)
 				}
-			case ErrNotFound:
+			case ErrNotFound.Is(err), ErrPermission.Is(err):
 				surf.LogInfo(ctx, "failed authentication attempt",
 					"login", login)
 				errors = append(errors, "Invalid login and/or password.")
@@ -718,8 +717,8 @@ func RegisterHandler(
 		}
 
 		baseScopes := createTopicScope.Add(createCommentScope)
-		switch user, err := bbStore.RegisterUser(ctx, password, User{Name: context.Login, Scopes: baseScopes}); err {
-		case nil:
+		switch user, err := bbStore.RegisterUser(ctx, password, User{Name: context.Login, Scopes: baseScopes}); {
+		case err == nil:
 			surf.LogInfo(ctx, "new user registered",
 				"name", user.Name,
 				"id", fmt.Sprint(user.UserID))
@@ -735,7 +734,7 @@ func RegisterHandler(
 				}
 				return surf.Redirect(next, http.StatusSeeOther)
 			}
-		case ErrConstraint:
+		case ErrConstraint.Is(err):
 			context.Errors["Login"] = "Login already in use"
 			return rend.Response(ctx, http.StatusBadRequest, "register.tmpl", context)
 		default:
@@ -833,10 +832,10 @@ func CommentEditHandler(
 		ctx := r.Context()
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		switch err {
-		case nil:
-			// all good
-		case ErrUnauthenticated:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrUnauthenticated.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusUnauthorized)
 		default:
 			surf.LogError(ctx, err, "cannot get current user")
@@ -844,10 +843,10 @@ func CommentEditHandler(
 		}
 
 		topic, comment, commentPos, err := bbstore.CommentByID(ctx, surf.PathArgInt64(r, 0))
-		switch err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
 		default:
 			surf.LogError(ctx, err, "cannot get comment",
@@ -924,10 +923,10 @@ func CommentEditHandler(
 
 		if content.Errors.Subject == "" && content.Errors.Content == "" {
 			if commentPos == 0 && topic.Subject != content.Input.Subject {
-				switch err := bbstore.UpdateTopic(ctx, topic.TopicID, content.Input.Subject); err {
-				case nil:
-					// all good
-				case ErrNotFound:
+				switch err := bbstore.UpdateTopic(ctx, topic.TopicID, content.Input.Subject); {
+				case err == nil:
+					// All good.
+				case ErrNotFound.Is(err):
 					return surf.StdResponse(ctx, rend, http.StatusNotFound)
 				default:
 					surf.LogError(ctx, err, "cannot update topic",
@@ -936,8 +935,8 @@ func CommentEditHandler(
 					return surf.StdResponse(ctx, rend, http.StatusInternalServerError)
 				}
 			}
-			switch err := bbstore.UpdateComment(ctx, comment.CommentID, content.Input.Content); err {
-			case nil:
+			switch err := bbstore.UpdateComment(ctx, comment.CommentID, content.Input.Content); {
+			case err == nil:
 				var url string
 				if page := int(commentPos / commentsPerPage); page < 2 {
 					url = fmt.Sprintf("/t/%d/%s/#comment-%d",
@@ -952,7 +951,7 @@ func CommentEditHandler(
 						comment.CommentID)
 				}
 				return surf.Redirect(url, http.StatusSeeOther)
-			case ErrNotFound:
+			case ErrNotFound.Is(err):
 				return surf.StdResponse(ctx, rend, http.StatusNotFound)
 			default:
 				surf.LogError(ctx, err, "cannot update content",
@@ -977,10 +976,10 @@ func CommentDeleteHandler(
 		commentID := surf.PathArgInt64(r, 0)
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		switch err {
-		case nil:
-			// all good
-		case ErrUnauthenticated:
+		switch {
+		case err == nil:
+			// All good.
+		case ErrUnauthenticated.Is(err):
 			return surf.StdResponse(ctx, rend, http.StatusUnauthorized)
 		default:
 			surf.LogError(ctx, err, "cannot get current user")
@@ -988,8 +987,8 @@ func CommentDeleteHandler(
 		}
 
 		topic, comment, pos, err := bbstore.CommentByID(ctx, commentID)
-		switch err {
-		case nil:
+		switch {
+		case err == nil:
 			if comment.Author.UserID != user.UserID && !user.Scopes.HasAny(adminScope, moderatorScope) {
 				surf.LogInfo(ctx, "comment deletion forbidden",
 					"comment", fmt.Sprint(commentID),
@@ -1001,7 +1000,7 @@ func CommentDeleteHandler(
 					Message: "Not allowed to delete.",
 				})
 			}
-		case ErrNotFound:
+		case ErrNotFound.Is(err):
 			surf.LogInfo(ctx, "comment not found",
 				"comment", fmt.Sprint(commentID))
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)
@@ -1027,10 +1026,10 @@ func CommentDeleteHandler(
 
 		// if it's the first comment, the entire topic is being deleted
 		if pos == 0 {
-			switch err := bbstore.DeleteTopic(ctx, topic.TopicID); err {
-			case nil:
-				// all good
-			case ErrNotFound:
+			switch err := bbstore.DeleteTopic(ctx, topic.TopicID); {
+			case err == nil:
+				// All good.
+			case ErrNotFound.Is(err):
 				surf.LogInfo(ctx, "cannot delete because topic not found",
 					"comment", fmt.Sprint(commentID))
 				return surf.StdResponse(ctx, rend, http.StatusNotFound)
@@ -1042,10 +1041,10 @@ func CommentDeleteHandler(
 			return surf.Redirect("/t/", http.StatusSeeOther)
 		}
 
-		switch err := bbstore.DeleteComment(ctx, commentID); err {
-		case nil:
-			// all good
-		case ErrNotFound:
+		switch err := bbstore.DeleteComment(ctx, commentID); {
+		case err == nil:
+			// All good.
+		case ErrNotFound.Is(err):
 			surf.LogInfo(ctx, "cannot delete because comment not found",
 				"comment", fmt.Sprint(commentID))
 			return surf.StdResponse(ctx, rend, http.StatusNotFound)

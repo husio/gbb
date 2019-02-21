@@ -3,11 +3,11 @@ package gbb
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/go-surf/surf"
+	"github.com/go-surf/surf/errors"
 	"github.com/go-surf/surf/sqldb"
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -35,7 +35,7 @@ func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
 		LIMIT 1000
 	`)
 	if err != nil {
-		return categories, fmt.Errorf("cannot fetch categories: %s", err)
+		return categories, errors.Wrap(err, "cannot fetch categories")
 	}
 	defer resp.Close()
 
@@ -45,10 +45,13 @@ func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
 			&c.CategoryID,
 			&c.Name,
 		); err != nil {
-			return categories, fmt.Errorf("cannot scan row: %s", err)
+			return categories, errors.Wrap(err, "cannot scan row")
 		}
 
 		categories = append(categories, &c)
+	}
+	if err := resp.Err(); err != nil {
+		return nil, errors.Wrap(err, "scanner failed")
 	}
 	return categories, nil
 }
@@ -56,18 +59,18 @@ func (s *pgBBStore) ListCategories(ctx context.Context) ([]*Category, error) {
 func (s *pgBBStore) AddCategories(ctx context.Context, names []string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin: %s", err)
+		return errors.Wrap(err, "begin")
 	}
 	defer tx.Rollback()
 
 	for _, name := range names {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO categories(name) VALUES ($1)`, name); err != nil {
-			return fmt.Errorf("cannot insert %q: %s", name, err)
+			return errors.Wrap(err, "cannot insert %q", name)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %s", err)
+		return errors.Wrap(err, "commit")
 	}
 	return nil
 }
@@ -81,7 +84,7 @@ func (s *pgBBStore) RemoveCategories(ctx context.Context, categoryIDs []int64) e
 
 func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit int) ([]*Topic, error) {
 	var topics []*Topic
-	resp, err := s.db.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			t.topic_id,
 			t.subject,
@@ -104,13 +107,13 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 		LIMIT $2
 	`, createdLte, limit)
 	if err != nil {
-		return topics, fmt.Errorf("cannot fetch topics: %s", err)
+		return topics, errors.Wrap(err, "cannot query topics")
 	}
-	defer resp.Close()
+	defer rows.Close()
 
-	for resp.Next() {
+	for rows.Next() {
 		var t Topic
-		if err := resp.Scan(
+		if err := rows.Scan(
 			&t.TopicID,
 			&t.Subject,
 			&t.Created,
@@ -122,10 +125,13 @@ func (s *pgBBStore) ListTopics(ctx context.Context, createdLte time.Time, limit 
 			&t.Category.CategoryID,
 			&t.Category.Name,
 		); err != nil {
-			return topics, fmt.Errorf("cannot scan row: %s", err)
+			return topics, errors.Wrap(err, "cannot scan topic row")
 		}
 
 		topics = append(topics, &t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "scanner failed")
 	}
 	return topics, nil
 }
@@ -150,7 +156,7 @@ func (s *pgBBStore) ListComments(ctx context.Context, topicID int64, offset, lim
 		OFFSET $3
 	`, topicID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("cannot fetch comments: %s", err)
+		return nil, errors.Wrap(err, "cannot query comments")
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -162,12 +168,15 @@ func (s *pgBBStore) ListComments(ctx context.Context, topicID int64, offset, lim
 			&c.Author.UserID,
 			&c.Author.Name,
 		); err != nil {
-			return comments, fmt.Errorf("cannot scan comment: %s", err)
+			return comments, errors.Wrap(err, "cannot scan comment")
 		}
 		comments = append(comments, &c)
 	}
 
-	return comments, castErr(rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "scanner failed")
+	}
+	return comments, nil
 }
 
 func (s *pgBBStore) Search(ctx context.Context, text string, categories []int64, offset, limit int64) ([]*SearchResult, error) {
@@ -203,7 +212,7 @@ func (s *pgBBStore) Search(ctx context.Context, text string, categories []int64,
 		OFFSET $4
 	`, text, pq.Array(categories), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("cannot execute query: %s", err)
+		return nil, errors.Wrap(err, "cannot execute query")
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -224,12 +233,15 @@ func (s *pgBBStore) Search(ctx context.Context, text string, categories []int64,
 			&r.Topic.Category.CategoryID,
 			&r.Topic.Category.Name,
 		); err != nil {
-			return results, fmt.Errorf("cannot scan row: %s", err)
+			return results, errors.Wrap(err, "cannot scan row")
 		}
 		results = append(results, &r)
 	}
 
-	return results, castErr(rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "scan failed")
+	}
+	return results, nil
 }
 
 func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error) {
@@ -266,7 +278,14 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 		&t.Category.CategoryID,
 		&t.Category.Name,
 	)
-	return &t, castErr(err)
+	switch {
+	case err == nil:
+		return &t, nil
+	case surf.ErrNotFound.Is(err):
+		return nil, ErrTopicNotFound
+	default:
+		return nil, errors.Wrap(err, "cannot scan topic")
+	}
 }
 
 func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, categoryID int64, userID int64) (*Topic, *Comment, error) {
@@ -274,7 +293,7 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ca
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot open transaction: %s", err)
+		return nil, nil, errors.Wrap(err, "cannot open the transaction")
 	}
 	defer tx.Rollback()
 
@@ -284,13 +303,13 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ca
 	err = tx.QueryRowContext(ctx, `
 		SELECT name FROM users WHERE user_id = $1 LIMIT 1
 	`, userID).Scan(&user.Name)
-	switch castErr(err) {
-	case nil:
-		// all good
-	case ErrNotFound:
-		return nil, nil, fmt.Errorf("user not found: %s", err)
+	switch {
+	case err == nil:
+		// All good
+	case surf.ErrNotFound.Is(err):
+		return nil, nil, ErrUserNotFound
 	default:
-		return nil, nil, fmt.Errorf("cannot fetch user: %s", err)
+		return nil, nil, errors.Wrap(err, "cannot fetch the user")
 	}
 
 	now := time.Now().UTC()
@@ -309,7 +328,7 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ca
 		RETURNING topic_id
 	`, topic.Subject, topic.Created, user.UserID, topic.Category.CategoryID).Scan(&topic.TopicID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot create topic: %s", err)
+		return nil, nil, errors.Wrap(err, "cannot create a topic")
 	}
 
 	comment := Comment{
@@ -324,11 +343,11 @@ func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, ca
 		RETURNING comment_id
 	`, comment.TopicID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot create comment: %s", err)
+		return nil, nil, errors.Wrap(err, "cannot create a comment")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("cannot commit transaction: %s", err)
+		return nil, nil, errors.Wrap(err, "cannot commit the transaction")
 	}
 	return &topic, &comment, nil
 }
@@ -338,7 +357,7 @@ func (s *pgBBStore) CreateComment(ctx context.Context, topicID int64, content st
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open transaction: %s", err)
+		return nil, errors.Wrap(err, "cannot open the transaction")
 	}
 	defer tx.Rollback()
 
@@ -348,13 +367,13 @@ func (s *pgBBStore) CreateComment(ctx context.Context, topicID int64, content st
 	err = tx.QueryRowContext(ctx, `
 		SELECT name FROM users WHERE user_id = $1 LIMIT 1
 	`, userID).Scan(&user.Name)
-	switch castErr(err) {
-	case nil:
-		// all good
-	case ErrNotFound:
-		return nil, fmt.Errorf("user not found: %s", err)
+	switch {
+	case err == nil:
+		// All good.
+	case surf.ErrNotFound.Is(err):
+		return nil, ErrUserNotFound
 	default:
-		return nil, fmt.Errorf("cannot fetch user: %s", err)
+		return nil, errors.Wrap(err, "cannot fetch the user")
 	}
 
 	comment := Comment{
@@ -369,17 +388,17 @@ func (s *pgBBStore) CreateComment(ctx context.Context, topicID int64, content st
 		VALUES ($1, $2, $3, $4)
 		RETURNING comment_id
 	`, comment.TopicID, comment.Content, comment.Created, user.UserID).Scan(&comment.CommentID)
-	switch err := castErr(err); err {
-	case nil:
-		// all good
-	case ErrConstraint:
-		return nil, ErrNotFound
+	switch {
+	case err == nil:
+		// All good.
+	case surf.ErrConstraint.Is(err):
+		return nil, ErrTopicNotFound
 	default:
-		return nil, fmt.Errorf("cannot create comment: %s", err)
+		return nil, errors.Wrap(err, "cannot create the comment")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("cannot commit transaction: %s", err)
+		return nil, errors.Wrap(err, "cannot commit the transaction")
 	}
 	return &comment, nil
 }
@@ -392,7 +411,7 @@ func (s *pgBBStore) IncrementTopicView(ctx context.Context, topicID int64) error
 		WHERE topic_id = $1
 	`, topicID)
 	if err != nil {
-		return fmt.Errorf("cannot execute query: %s", err)
+		return errors.Wrap(err, "cannot increament the topic view counter")
 	}
 	// it does not matter that if counter was incremented or not -
 	// successfult query execution is good enough for this use case
@@ -406,13 +425,13 @@ func (s *pgBBStore) UpdateComment(ctx context.Context, commentID int64, content 
 		WHERE comment_id = $1
 	`, commentID, content)
 	if err != nil {
-		return castErr(err)
+		return errors.Wrap(err, "cannot update the comment content")
 	}
 
 	if n, err := res.RowsAffected(); err != nil {
-		return err
+		return errors.Wrap(err, "cannot get rows affected by the content change")
 	} else if n == 0 {
-		return ErrNotFound
+		return ErrCommentNotFound
 	}
 	return nil
 }
@@ -424,13 +443,13 @@ func (s *pgBBStore) UpdateTopic(ctx context.Context, topicID int64, subject stri
 		WHERE topic_id = $1
 	`, topicID, subject)
 	if err != nil {
-		return castErr(err)
+		return errors.Wrap(err, "cannot update the topic subject")
 	}
 
 	if n, err := res.RowsAffected(); err != nil {
-		return err
+		return errors.Wrap(err, "cannot get rows affected by the subject change")
 	} else if n == 0 {
-		return ErrNotFound
+		return ErrTopicNotFound
 	}
 	return nil
 }
@@ -438,35 +457,38 @@ func (s *pgBBStore) UpdateTopic(ctx context.Context, topicID int64, subject stri
 func (s *pgBBStore) DeleteTopic(ctx context.Context, topicID int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("cannot start transaction: %s", err)
+		return errors.Wrap(err, "cannot start the transaction")
 	}
 	defer tx.Rollback()
 
 	if _, err = tx.ExecContext(ctx, `DELETE FROM comments WHERE topic_id = $1`, topicID); err != nil {
-		return castErr(err)
+		return errors.Wrap(err, "cannot delete all topic %d comments", topicID)
 	}
 
 	if res, err := tx.ExecContext(ctx, `DELETE FROM topics WHERE topic_id = $1`, topicID); err != nil {
-		return castErr(err)
+		return errors.Wrap(err, "cannot delete topic %d", topicID)
 	} else {
 		if n, err := res.RowsAffected(); err != nil {
-			return err
+			return errors.Wrap(err, "cannot get the count of rows affected by the topic delete")
 		} else if n == 0 {
-			return ErrNotFound
+			return ErrTopicNotFound
 		}
 	}
-	return castErr(tx.Commit())
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "cannot commit")
+	}
+	return nil
 }
 
 func (s *pgBBStore) DeleteComment(ctx context.Context, commentID int64) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM comments WHERE comment_id = $1`, commentID)
 	if err != nil {
-		return castErr(err)
+		return errors.Wrap(err, "cannot delete comment %d", commentID)
 	}
 	if n, err := res.RowsAffected(); err != nil {
-		return castErr(err)
+		return errors.Wrap(err, "cannot get the count of rows affected by the comment delete")
 	} else if n != 1 {
-		return ErrNotFound
+		return ErrCommentNotFound
 	}
 	return nil
 }
@@ -521,56 +543,74 @@ func (s *pgBBStore) CommentByID(ctx context.Context, commentID int64) (*Topic, *
 		&c.Author.Name,
 		&commentPos,
 	)
-	return &t, &c, commentPos, castErr(err)
+	switch {
+	case err == nil:
+		return &t, &c, commentPos, nil
+	case surf.ErrNotFound.Is(err):
+		return nil, nil, 0, ErrCommentNotFound
+	default:
+		return nil, nil, 0, errors.Wrap(err, "cannot query comment")
+	}
 }
 
 func (s *pgBBStore) AuthenticateUser(ctx context.Context, login, password string) (*User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot begin the transaction")
+	}
+	defer tx.Rollback()
+
 	var passhash string
-	switch err := s.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		SELECT password
 		FROM users
 		WHERE name = $1
 		LIMIT 1
-	`, login).Scan(&passhash); err {
-	case nil:
-		// all good
-	case sqldb.ErrNotFound:
-		return nil, ErrNotFound
+	`, login).Scan(&passhash)
+	switch {
+	case err == nil:
+		// All good.
+	case surf.ErrNotFound.Is(err):
+		return nil, ErrUserNotFound
 	default:
-		return nil, fmt.Errorf("database: %s", err)
+		return nil, errors.Wrap(err, "cannot fetch user password hash")
 	}
 
 	switch err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(password)); err {
 	case nil:
 		// all good
 	case bcrypt.ErrMismatchedHashAndPassword:
-		return nil, ErrNotFound
+		return nil, errors.Wrap(ErrPermission, "invalid password")
 	default:
-		return nil, fmt.Errorf("bcrypt: %s", err)
+		return nil, errors.Wrap(err, "bcrypt")
 	}
 
 	var u User
-	err := s.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		SELECT user_id, name, scopes
 		FROM users
 		WHERE name = $1
 		LIMIT 1
 	`, login).Scan(&u.UserID, &u.Name, &u.Scopes)
-	return &u, castErr(err)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot query user details")
+	}
+	return &u, nil
 }
 
 func (s *pgBBStore) RegisterUser(ctx context.Context, password string, u User) (*User, error) {
 	passhash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("cannot hash password: %s", err)
+		return nil, errors.Wrap(err, "cannot hash password")
 	}
 	err = s.db.QueryRowContext(ctx, `
 		INSERT INTO users (password, name, scopes)
 		VALUES ($1, $2, $3)
 		RETURNING user_id
 	`, passhash, u.Name, u.Scopes).Scan(&u.UserID)
-	if err := castErr(err); err != nil {
-		return nil, err
+
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot insert user")
 	}
 	return &u, nil
 }
@@ -593,7 +633,14 @@ func (s *pgBBStore) UserInfo(ctx context.Context, userID int64) (*UserInfo, erro
 		&u.Scopes,
 		&u.TopicsCount,
 		&u.CommentsCount)
-	return &u, castErr(err)
+	switch {
+	case err == nil:
+		return &u, nil
+	case surf.ErrNotFound.Is(err):
+		return nil, ErrUserNotFound
+	default:
+		return nil, errors.Wrap(err, "cannot get user")
+	}
 }
 
 func (s *pgBBStore) ensureSchema(ctx context.Context) error {
@@ -710,7 +757,7 @@ CREATE INDEX IF NOT EXISTS topics_created_idx ON topics(latest_comment);
 			if max := 30; len(migration) > max {
 				migration = migration[max:]
 			}
-			return fmt.Errorf("migration %d (%s): %s", i, migration, err)
+			return errors.Wrap(err, "migration %d (%s)", i, migration)
 		}
 	}
 	return nil
