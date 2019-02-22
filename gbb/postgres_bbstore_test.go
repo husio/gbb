@@ -32,13 +32,14 @@ func TestCreateTopic(t *testing.T) {
 	db := createDatabase(t)
 	defer db.Close()
 
-	ensureUser(t, db, 999, "Bobby")
-
 	store, err := NewPostgresBBStore(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	topic, comment, err := store.CreateTopic(ctx, "first", "IMO", 999)
+
+	ensureUser(t, db, 999, "Bobby")
+
+	topic, comment, err := store.CreateTopic(ctx, "first", "IMO", 1, 999)
 	if err != nil {
 		t.Fatalf("cannot create topic: %s", err)
 	}
@@ -67,13 +68,14 @@ func TestCreateComment(t *testing.T) {
 	db := createDatabase(t)
 	defer db.Close()
 
-	ensureUser(t, db, 999, "Bobby")
-
 	store, err := NewPostgresBBStore(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	topic, _, err := store.CreateTopic(ctx, "first", "IMO", 999)
+
+	ensureUser(t, db, 999, "Bobby")
+
+	topic, _, err := store.CreateTopic(ctx, "first", "IMO", 1, 999)
 	if err != nil {
 		t.Fatalf("cannot create topic: %s", err)
 	}
@@ -101,13 +103,14 @@ func TestCreateCommentTopicNotFound(t *testing.T) {
 	db := createDatabase(t)
 	defer db.Close()
 
-	ensureUser(t, db, 999, "Bobby")
-
 	store, err := NewPostgresBBStore(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c, err := store.CreateComment(ctx, 1244141412, "IMO", 999); err != ErrNotFound {
+
+	ensureUser(t, db, 999, "Bobby")
+
+	if c, err := store.CreateComment(ctx, 1244141412, "IMO", 999); !ErrTopicNotFound.Is(err) {
 		t.Fatalf("want ErrNotFound, got %q and %+v", err, c)
 	}
 }
@@ -173,7 +176,7 @@ func ensureUser(t *testing.T, db *sql.DB, userID int, name string) {
 	t.Helper()
 
 	if _, err := db.Exec(`
-		INSERT INTO users (user_id, name) VALUES ($1, $2)
+		INSERT INTO users (user_id, name, password) VALUES ($1, $2, '-')
 		`, userID, name); err != nil {
 		t.Fatalf("cannot create user %d %q: %s", userID, name, err)
 	}

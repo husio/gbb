@@ -288,7 +288,13 @@ func (s *pgBBStore) TopicByID(ctx context.Context, topicID int64) (*Topic, error
 	}
 }
 
-func (s *pgBBStore) CreateTopic(ctx context.Context, subject, content string, categoryID int64, userID int64) (*Topic, *Comment, error) {
+func (s *pgBBStore) CreateTopic(
+	ctx context.Context,
+	subject string,
+	content string,
+	categoryID int64,
+	userID int64,
+) (*Topic, *Comment, error) {
 	defer surf.CurrentTrace(ctx).Begin("create topic").Finish()
 
 	tx, err := s.db.BeginTx(ctx, nil)

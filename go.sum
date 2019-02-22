@@ -1,7 +1,5 @@
-github.com/go-surf/surf v0.0.0-20180914114933-b33a4aae9605 h1:oxnIef7Av+kBYbq+YmS10K7/J7S3zlTpskhKd7W7VTM=
-github.com/go-surf/surf v0.0.0-20180914114933-b33a4aae9605/go.mod h1:SynuCH9lZijzP3IB0gkFkIoZqkyGyirv1VhUjsmkyzg=
-github.com/go-surf/surf v0.0.0-20190219081917-3b3aad1efdeb h1:nJaaDdWass/bZApFoszhkOSMHNKtje4kZY+T9FfGjNo=
-github.com/go-surf/surf v0.0.0-20190219081917-3b3aad1efdeb/go.mod h1:fh3LwhSEJN/mghvNRqmOF+VBOjSxu2EpQu6IK8xB2fo=
+github.com/go-surf/surf v0.0.0-20190222165809-a6b604fcc61e h1:J/BXUoVyV9W0vkzKxCEvnNXchJme/SeB4Xg1WQ69xjY=
+github.com/go-surf/surf v0.0.0-20190222165809-a6b604fcc61e/go.mod h1:fh3LwhSEJN/mghvNRqmOF+VBOjSxu2EpQu6IK8xB2fo=
 github.com/gomodule/redigo v2.0.0+incompatible/go.mod h1:B4C85qUVwatsJoIUNIfCRsp7qO0iAmpGFZ4EELWSbC4=
 github.com/husio/gbb v0.0.0-20180819142141-5b37fb9dd3c0/go.mod h1:fwln/ZOskUulPXKS4NibSLMhfuWmybKzDQbg5c0yjIM=
 github.com/lib/pq v0.0.0-20180123210206-19c8e9ad0095 h1:Do4XI4HSm+8jdo6z1Zk0CQDgqoAMwWew3ksTcDDSWiA=
