@@ -23,8 +23,8 @@ func UserDetailsHandler(
 		userID := surf.PathArgInt64(r, 0)
 
 		currentUser, err := CurrentUser(ctx, authStore.Bind(w, r))
-		if err != nil && err != ErrUnauthenticated {
-			surf.LogError(ctx, err, "cannot authenticated user")
+		if err != nil && !ErrUnauthenticated.Is(err) {
+			surf.LogError(ctx, err, "cannot authenticate user")
 		}
 
 		switch browsedUser, err := bbStore.UserInfo(ctx, userID); {
@@ -71,8 +71,8 @@ func TopicListHandler(
 		ctx := r.Context()
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		if err != nil && err != ErrUnauthenticated {
-			surf.LogError(ctx, err, "cannot authenticated user")
+		if err != nil && !ErrUnauthenticated.Is(err) {
+			surf.LogError(ctx, err, "cannot authenticate user")
 		}
 
 		createdLte, ok := timeFromParam(r.URL.Query(), "after")
@@ -268,8 +268,8 @@ func CommentListHandler(
 		topicID := surf.PathArgInt64(r, 0)
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		if err != nil && err != ErrUnauthenticated {
-			surf.LogError(ctx, err, "cannot authenticated user")
+		if err != nil && !ErrUnauthenticated.Is(err) {
+			surf.LogError(ctx, err, "cannot authenticate user")
 		}
 		surf.LogInfo(ctx, "current user fetched",
 			"user", fmt.Sprint(user))
@@ -405,7 +405,7 @@ func LastSeenCommentHandler(
 		}
 
 		user, err := CurrentUser(ctx, authStore.Bind(w, r))
-		if err != nil && err != ErrUnauthenticated {
+		if err != nil && !ErrUnauthenticated.Is(err) {
 			surf.LogError(ctx, err, "cannot get user information")
 		}
 
@@ -605,7 +605,7 @@ func LoginHandler(
 		}
 
 		user, err := CurrentUser(ctx, boundCache)
-		if err != nil && err != ErrUnauthenticated {
+		if err != nil && !ErrUnauthenticated.Is(err) {
 			surf.LogError(ctx, err, "cannot get current user from cache")
 			// continue - this is not a critical error
 		}
@@ -639,7 +639,7 @@ func LogoutHandler(
 
 		if r.Method == "GET" {
 			user, err := CurrentUser(ctx, authStore.Bind(w, r))
-			if err != nil && err != ErrUnauthenticated {
+			if err != nil && !ErrUnauthenticated.Is(err) {
 				surf.LogError(ctx, err, "cannot get current user from cache")
 				// continue - this is not a critical error
 			}
